@@ -80,4 +80,4 @@ Single-context: `GLOSSARY.md` + `docs/adr/` at the root, created lazily, owned b
 
 ### Stack notes
 
-iOS/Xcode conflict-proofing: `docs/agents/stack-ios.md`.
+The kind of app is `stack` in `.hack/lanes.json` (`ios` or `other`). Read `stacks/<stack>/README.md` before creating the project, changing how it runs, or answering how to test it. iOS: project layout `stacks/ios/PROJECT.md`, simulator `stacks/ios/RUN.md`, real iPhone `stacks/ios/DEVICE.md` (skill: `hack-device`). The `stacks/` folder belongs to the lead lane.

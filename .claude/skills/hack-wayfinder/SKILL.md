@@ -60,7 +60,7 @@ Rules, in priority order:
 3. **One lane is the lead lane**: it owns the app shell / composition root, root config, dependency manifests, `docs/DEMO.md`, and integration. Give it the lightest feature load.
 4. **Each lane publishes a contract and a stub.** `docs/lanes/<lane>/CONTRACT.md` says what the lane exposes (function/endpoint/view names, data shapes, example values) and what it consumes. Each lane's *first* ticket is a hardcoded stub of that contract, shipped within 30 minutes, so nobody ever waits on anybody.
 5. **Balance by risk, not by size.** The lane carrying *the moment* goes to the fastest person and gets the least else.
-6. **Stack-specific conflict traps** are designed out here: see `docs/agents/stack-ios.md` for Xcode projects.
+6. **Stack-specific conflict traps** are designed out here: see the stack's guide: `stacks/ios/PROJECT.md` for Xcode projects, `stacks/other/README.md` for anything else.
 
 Present the cut as a table (lane · owner · folders · beats carried · exposes · consumes) and get a yes from the team.
 

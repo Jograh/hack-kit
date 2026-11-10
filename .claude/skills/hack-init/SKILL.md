@@ -9,5 +9,9 @@ disable-model-invocation: true
    - Creates the repo, pushes `dev` (default branch) and `prod`, turns on auto-merge, creates labels.
    - Tries to protect `dev` (PRs must pass `lane-check`) and `prod` (no force-push). That needs a public repo or a paid org plan; if it can't, shipping still works, PRs just merge without waiting for the check.
 3. Invite each teammate with write access: `gh api -X PUT repos/<org>/<repo>/collaborators/<login> -f permission=push`. Tell the user they must accept the invite.
-4. If the stack is already known, set it up now, before lanes exist, so day-of starts at the idea: for iOS follow `docs/agents/stack-ios.md`; then confirm `scripts/hack run` launches an empty app.
+4. **Pick the stack.** Ask: is this an **iOS app** or **something else**? Then `scripts/hack stack ios` or `scripts/hack stack other`, and follow that stack's guide now, before lanes exist, so day one starts at the idea:
+   - **iOS** → `stacks/ios/README.md` (*Set up*): scaffold the app, confirm it opens in the simulator. If the demo will run on a real iPhone, also call the Skill tool with "hack-device" now, so the one-time phone setup isn't left for the venue.
+   - **Other** → `stacks/other/README.md`: ask what the app is made of (for example "FastAPI + Vite"), then build its start-up process (`scripts/dev`, `run.command`, `run.url`, `run.check`) and write `stacks/other/THIS-APP.md`.
+   - Not decided yet → skip; the lead runs `scripts/hack stack <ios|other>` and the guide once it is.
+   Either way, finish by confirming `scripts/hack run` launches an empty app.
 5. Tell the user what's next: at the hackathon, run `/hack-wayfinder` with the team in the room.

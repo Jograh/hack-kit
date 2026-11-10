@@ -656,6 +656,18 @@ cmd_labels() {
   echo "  labels: ready-for-agent, needs-human, broadcast, request, hack:map, P0-golden-path, P1-real, P2-polish"
 }
 
+# stack [ios|other]: which kind of app this is. Decides which guide in stacks/ the agents follow.
+cmd_stack() {
+  local s="${1:-}"
+  if [ -z "$s" ]; then local cur; cur="$(cfg '.stack // empty')"
+    if [ -n "$cur" ]; then echo "Stack: $cur · guide: stacks/$cur/README.md"; else echo "Stack: not chosen yet. Set it: scripts/hack stack ios|other"; fi
+    return 0; fi
+  case "$s" in ios|other) ;; *) die "stack must be 'ios' or 'other'" ;; esac
+  local tmp; tmp="$(mktemp)"
+  jq --arg s "$s" '.stack = $s' "$CFG" > "$tmp" && mv "$tmp" "$CFG" || die "could not rewrite $CFG"
+  echo "✓ Stack: $s. Follow stacks/$s/README.md to set the project up."
+}
+
 # team [n]: how many people (2–6) = how many lanes. Rebuilds the placeholder lanes; refuses once lanes are named.
 cmd_team() {
   local n="${1:-}"
@@ -728,6 +740,162 @@ cmd_promote() {
 
 # ───────────────────────────── run ─────────────────────────────
 
+# Finds the Xcode project/workspace and scheme. Sets IOS_TARGET (array) and IOS_SCHEME.
+ios_target() {
+  if [ -f project.yml ] && command -v xcodegen >/dev/null 2>&1; then xcodegen generate -q || die "xcodegen failed"; fi
+  local ws proj
+  ws="$(find . -maxdepth 2 -name '*.xcworkspace' -not -path '*/.build/*' -not -path '*.xcodeproj/*' | head -1)"
+  proj="$(find . -maxdepth 2 -name '*.xcodeproj' -not -path '*/.build/*' | head -1)"
+  if [ -n "$ws" ]; then IOS_TARGET=(-workspace "$ws"); elif [ -n "$proj" ]; then IOS_TARGET=(-project "$proj"); else die "no Xcode project found"; fi
+  IOS_SCHEME="$(cfg '.run.scheme // empty')"
+  [ -n "$IOS_SCHEME" ] || IOS_SCHEME="$(xcodebuild "${IOS_TARGET[@]}" -list -json 2>/dev/null | jq -r '(.workspace // .project).schemes[0] // empty')"
+  [ -n "$IOS_SCHEME" ] || die "no scheme found — set .run.scheme in .hack/lanes.json"
+}
+
+# ───────────────────────────── iOS on a real phone ─────────────────────────────
+# Signing is per person and never committed: the team id lives in .hack/local.json and is passed on the command line,
+# so project.pbxproj is never touched. See stacks/ios/DEVICE.md.
+
+local_set() { # <jq filter> [jq args…]
+  local f="$1"; shift; local tmp; tmp="$(mktemp)"
+  jq "$@" "$f" "$LOCAL" > "$tmp" && mv "$tmp" "$LOCAL"
+}
+
+# Apple ID teams known to Xcode on this Mac: TEAMID <tab> name <tab> free|paid
+ios_teams() {
+  plutil -extract IDEProvisioningTeams json -o - "$HOME/Library/Preferences/com.apple.dt.Xcode.plist" 2>/dev/null \
+    | jq -r '[.[][]] | unique_by(.teamID)[] | [.teamID, (.teamName // "?"), (if .isFreeProvisioningTeam then "free" else "paid" end)] | @tsv' 2>/dev/null
+}
+
+ios_team() {
+  local t; t="$(jq -r '.ios.team // empty' "$LOCAL" 2>/dev/null)"
+  if [ -z "$t" ]; then
+    local all; all="$(ios_teams)"
+    if [ "$(printf '%s' "$all" | grep -c .)" = "1" ]; then t="$(printf '%s' "$all" | cut -f1)"; [ -f "$LOCAL" ] && local_set '.ios.team = $t' --arg t "$t"; fi
+  fi
+  [ -n "$t" ] && echo "$t"
+}
+
+# The physical iPhone to use: identifier <tab> udid <tab> name <tab> developerMode <tab> pairing <tab> transport
+ios_phone() {
+  mkdir -p "$STATE"; local j="$STATE/devices.json" want
+  xcrun devicectl list devices --json-output "$j" >/dev/null 2>&1 || return 1
+  want="$(jq -r '.ios.device // empty' "$LOCAL" 2>/dev/null)"
+  jq -r --arg w "$want" '
+    [.result.devices[] | select(.hardwareProperties.reality == "physical" and .hardwareProperties.platform == "iOS")
+      | {id: .identifier, udid: .hardwareProperties.udid, name: (.deviceProperties.name // "iPhone"),
+         dev: (.deviceProperties.developerModeStatus // "unknown"), pair: (.connectionProperties.pairingState // "unknown"),
+         via: (.connectionProperties.transportType // "none")}]
+    | (map(select($w != "" and (.name == $w or .udid == $w))) + (map(select(.via != "none")) | sort_by(.via != "wired")) + .)
+    | .[0] // empty | [.id, .udid, .name, .dev, .pair, .via] | @tsv' "$j" 2>/dev/null
+}
+
+# device [--team ID] [--phone "name"]: the one-time checklist. Exit 0 only when a phone build can go ahead.
+cmd_device() {
+  [ "$(uname)" = "Darwin" ] && command -v xcodebuild >/dev/null 2>&1 || die "No Mac/Xcode here — a phone build needs a Mac."
+  [ -f "$LOCAL" ] || die "run scripts/hack setup first"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --team) local_set '.ios.team = $t' --arg t "${2:-}"; shift ;;
+      --phone) local_set '.ios.device = $t' --arg t "${2:-}"; shift ;;
+    esac; shift
+  done
+  local ok=1 teams team row id udid name dev pair via
+  echo "── iPhone checklist ──"
+  echo "  ✓ $(xcodebuild -version 2>/dev/null | head -1)"
+  teams="$(ios_teams)"; team="$(ios_team)"
+  if [ -z "$teams" ] && [ -z "$team" ]; then
+    echo "  ✗ No Apple ID in Xcode. Open Xcode > Settings > Accounts > + > Apple Account and sign in. A free Apple ID is enough."; ok=0
+  elif [ -z "$team" ]; then
+    echo "  ✗ More than one Apple team on this Mac. Pick one: scripts/hack device --team <ID>"; printf '%s\n' "$teams" | sed 's/^/      /'; ok=0
+  else
+    echo "  ✓ Signing team: $team $(printf '%s\n' "$teams" | awk -F'\t' -v t="$team" '$1 == t {print "(" $2 ", " $3 ")"}')"
+  fi
+  row="$(ios_phone)"
+  if [ -z "$row" ]; then
+    echo "  ✗ No iPhone found. Plug it in with the cable, unlock it, and tap Trust on the phone."; ok=0
+  else
+    IFS=$'\t' read -r id udid name dev pair via <<EOF2
+$row
+EOF2
+    if [ "$via" = "none" ]; then echo "  ✗ '$name' is known but not connected. Plug it in with the cable and unlock it."; ok=0
+    else echo "  ✓ iPhone: $name (connected: $via)"; fi
+    if [ "$pair" = "paired" ]; then echo "  ✓ Paired with this Mac"
+    else echo "  ✗ Not paired. Unlock the phone and tap Trust; if nothing appears, open Xcode > Window > Devices and Simulators."; ok=0; fi
+    case "$dev" in
+      enabled) echo "  ✓ Developer Mode is on" ;;
+      disabled) echo "  ✗ Developer Mode is off. On the phone: Settings > Privacy & Security > Developer Mode > on, restart, then confirm."; ok=0 ;;
+      *) echo "  ? Developer Mode: can't tell yet. If the build fails, check Settings > Privacy & Security > Developer Mode." ;;
+    esac
+  fi
+  echo
+  if [ "$ok" = 1 ]; then echo "✓ Ready. Put the app on the phone: scripts/hack run --device"; return 0; fi
+  echo "Not ready yet. Fix the ✗ lines (stacks/ios/DEVICE.md has the details), then run this again."; return 1
+}
+
+ios_device_hints() { # <log file>
+  local f="$1"
+  grep -Eqi 'no account for team|no accounts? ' "$f" && echo "  → Xcode has no Apple ID for this team. Xcode > Settings > Accounts, sign in, then retry."
+  grep -Eqi 'developer mode' "$f" && echo "  → Developer Mode is off on the phone: Settings > Privacy & Security > Developer Mode."
+  grep -Eqi 'not been explicitly trusted|untrusted developer|invalid code signature' "$f" && echo "  → First install from this Apple ID: on the phone open Settings > General > VPN & Device Management, tap your Apple ID, tap Trust. Then run it again."
+  grep -Eqi 'device (is|was) locked|passcode|unlock' "$f" && echo "  → The phone is locked. Unlock it and retry."
+  grep -Eqi 'maximum number of app|app id.*(limit|maximum)|exceeded' "$f" && echo "  → A free Apple ID allows only a few new app IDs per week. Keep the same app name and bundle id; don't rename."
+  grep -Eqi 'no profiles for|provisioning profile' "$f" && echo "  → No provisioning profile yet. Open the project in Xcode once with the phone plugged in, choose your team under Signing & Capabilities, build once, then close WITHOUT committing project.pbxproj (git restore it)."
+  grep -Eqi 'unpaired|not paired|pairing' "$f" && echo "  → The phone is not paired with this Mac. Unlock it and tap Trust."
+  return 0
+}
+
+# run --device [--prod]: build for the plugged-in iPhone, install, launch.
+ios_device_run() {
+  local prod=0; [ "${1:-}" = "--prod" ] && prod=1
+  [ "$(uname)" = "Darwin" ] && command -v xcodebuild >/dev/null 2>&1 || die "No Mac/Xcode here — a phone build needs a Mac."
+  mkdir -p "$STATE"
+  local team row id udid name dev pair via base bid me dd app log="$STATE/device-build.log"
+  team="$(ios_team)"; [ -n "$team" ] || die "no signing team yet — run: scripts/hack device"
+  row="$(ios_phone)"; [ -n "$row" ] || die "no iPhone found — plug it in, unlock it, then: scripts/hack device"
+  IFS=$'\t' read -r id udid name dev pair via <<EOF2
+$row
+EOF2
+  [ "$via" != "none" ] || die "'$name' is not connected — plug it in with the cable and unlock it"
+  [ "$dev" != "disabled" ] || die "Developer Mode is off on '$name' — Settings > Privacy & Security > Developer Mode"
+  local cache="${HACK_BUILD_DIR:-$HOME/Library/Caches/hack-kit}/$(basename "$ROOT")-$(printf '%s' "$ROOT" | cksum | cut -d' ' -f1)"
+  if [ "$prod" = 1 ]; then
+    # Build exactly what was promoted, from a clean checkout, whatever state this working copy is in.
+    git fetch -q origin "$DEMO" || die "could not fetch $DEMO"
+    local wt="$cache/prod-src"
+    git worktree remove --force "$wt" >/dev/null 2>&1 || true; rm -rf "$wt"
+    git worktree add -q --detach "$wt" "origin/$DEMO" || die "could not check out $DEMO"
+    cd "$wt" || exit 1
+    echo "Building $DEMO ($(git log -1 --format='%h %s'))…"
+  fi
+  ios_target
+  base="$(xcodebuild "${IOS_TARGET[@]}" -scheme "$IOS_SCHEME" -showBuildSettings -json 2>/dev/null | jq -r '.[0].buildSettings.PRODUCT_BUNDLE_IDENTIFIER // empty')"
+  [ -n "$base" ] || die "could not read the app's bundle identifier"
+  # Each Apple ID needs its own bundle id (free accounts can't share one), so add the person's username.
+  me="$(my_login | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9-')"
+  bid="$(jq -r '.ios.bundle // empty' "$LOCAL" 2>/dev/null)"; [ -n "$bid" ] || bid="$base${me:+.$me}"
+  dd="$cache/dd-device"; mkdir -p "$dd"
+  echo "Building '$IOS_SCHEME' for $name (team $team, bundle id $bid)…"
+  if ! xcodebuild "${IOS_TARGET[@]}" -scheme "$IOS_SCHEME" -configuration Debug -destination "id=$udid" -derivedDataPath "$dd" \
+        -allowProvisioningUpdates DEVELOPMENT_TEAM="$team" PRODUCT_BUNDLE_IDENTIFIER="$bid" CODE_SIGN_STYLE=Automatic -quiet build > "$log" 2>&1; then
+    grep -E "error:|not allowed|failed with|BUILD FAILED" "$log" | sort -u | head -20
+    ios_device_hints "$log"
+    die "PHONE BUILD FAILED — full log: .hack/state/device-build.log"
+  fi
+  app="$(find "$dd/Build/Products/Debug-iphoneos" -maxdepth 1 -name '*.app' | head -1)"
+  [ -n "$app" ] || die "built, but no .app found"
+  if ! xcrun devicectl device install app --device "$id" "$app" > "$log" 2>&1; then
+    tail -5 "$log"; ios_device_hints "$log"; die "INSTALL FAILED — full log: .hack/state/device-build.log"
+  fi
+  if ! xcrun devicectl device process launch --device "$id" --terminate-existing "$bid" > "$log" 2>&1; then
+    tail -5 "$log"; ios_device_hints "$log"
+    echo "✓ Installed on $name, but it didn't open. Unlock the phone and tap the app icon; if iOS refuses, follow the → line above."
+    return 0
+  fi
+  echo "✓ Running $bid on $name.$( [ "$prod" = 1 ] && echo " This is the $DEMO build." )"
+  echo "  Agents can't see a real phone: ask the user what is on screen."
+}
+
 # Pick (and boot) the simulator: configured name → a booted standard iPhone → first available iPhone. Prints its UDID.
 ios_pick_sim() {
   local want udid; want="$(cfg '.run.simulator // empty')"
@@ -753,14 +921,8 @@ ios_run() {
   local panel=0; [ "${1:-}" = "--panel" ] && panel=1
   [ "$(uname)" = "Darwin" ] && command -v xcodebuild >/dev/null 2>&1 || {
     echo "No Mac/Xcode here — can't run the iOS app locally. Ship it and ask a Mac teammate: scripts/hack request <lane> \"please run + screenshot <what>\""; return 0; }
-  if [ -f project.yml ] && command -v xcodegen >/dev/null 2>&1; then xcodegen generate -q || die "xcodegen failed"; fi
-  local ws proj target scheme udid dd app bid
-  ws="$(find . -maxdepth 2 -name '*.xcworkspace' -not -path '*/.build/*' -not -path '*.xcodeproj/*' | head -1)"
-  proj="$(find . -maxdepth 2 -name '*.xcodeproj' -not -path '*/.build/*' | head -1)"
-  if [ -n "$ws" ]; then target=(-workspace "$ws"); elif [ -n "$proj" ]; then target=(-project "$proj"); else die "no Xcode project found"; fi
-  scheme="$(cfg '.run.scheme // empty')"
-  [ -n "$scheme" ] || scheme="$(xcodebuild "${target[@]}" -list -json 2>/dev/null | jq -r '(.workspace // .project).schemes[0] // empty')"
-  [ -n "$scheme" ] || die "no scheme found — set .run.scheme in .hack/lanes.json"
+  local udid dd app bid scheme; local -a target
+  ios_target; target=("${IOS_TARGET[@]}"); scheme="$IOS_SCHEME"
   udid="$(ios_pick_sim)" || exit 1
   # --panel: the app is shown in Claude's built-in simulator panel, so don't also open a Simulator window.
   [ "$panel" = 1 ] || open -a Simulator 2>/dev/null || true
@@ -791,7 +953,7 @@ cmd_scaffold_ios() {
   echo "$name" | grep -Eq '^[A-Za-z][A-Za-z0-9]*$' || die "usage: scripts/hack scaffold-ios <AppName>   (letters/digits only)"
   [ -e "$name.xcodeproj" ] && die "$name.xcodeproj already exists"
   mkdir -p "$name.xcodeproj" "$name/App" "$name/Shared"
-  sed "s/__APP__/$name/g; s/__BUNDLE__/$(echo "$name" | tr 'A-Z' 'a-z')/g" "$ROOT/scripts/templates/ios.pbxproj" > "$name.xcodeproj/project.pbxproj"
+  sed "s/__APP__/$name/g; s/__BUNDLE__/$(echo "$name" | tr 'A-Z' 'a-z')/g" "$ROOT/stacks/ios/project.pbxproj.template" > "$name.xcodeproj/project.pbxproj"
   cat > "$name/App/${name}App.swift" <<SWIFT
 import SwiftUI
 
@@ -813,8 +975,13 @@ SWIFT
 
 cmd_run() {
   mkdir -p "$STATE"
+  case " $* " in *" --device "*) case " $* " in *" --prod "*) ios_device_run --prod ;; *) ios_device_run ;; esac; return $? ;; esac
   local c; c="$(cfg '.run.command // empty')"
-  if [ -n "$c" ]; then echo "run: $c"; eval "$c"; return $?; fi
+  if [ -n "$c" ]; then
+    echo "run: $c"; eval "$c"; local rc=$?
+    local u; u="$(cfg '.run.url // empty')"; [ -n "$u" ] && [ "$rc" = 0 ] && echo "open: $u"
+    return $rc
+  fi
   if [ -f project.yml ] || [ -n "$(find . -maxdepth 2 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) -not -path '*/.build/*' | head -1)" ]; then ios_run "$@"; return $?; fi
   if [ -f package.json ] && jq -e '.scripts.dev' package.json >/dev/null 2>&1; then
     [ -d node_modules ] || npm install
@@ -830,6 +997,9 @@ usage() {
 hack — hackathon kit
   setup [lane]            set up YOUR workspace after cloning (branch, hooks, identity)
   run [--panel]           build + launch the app (one command; --panel = shown in Claude's simulator panel)
+  run --device [--prod]   iOS: build, install and launch on the plugged-in iPhone (--prod = the promoted demo build)
+  device                  iOS: the one-time phone checklist (Apple ID, cable, trust, Developer Mode)
+  stack [ios|other]       LEAD: which kind of app this is (picks the guide in stacks/)
   sim                     boot the simulator `run` uses and print its id
   decide "title" "Before/Now/Why" [--affects a,b]   record a direction change + push it to every agent
   direction [n]           the latest decisions
@@ -868,6 +1038,8 @@ case "$sub" in
   lane-check) cmd_lane_check "$@" ;;
   init) cmd_init "$@" ;;
   team) cmd_team "$@" ;;
+  stack) cmd_stack "$@" ;;
+  device) cmd_device "$@" ;;
   labels) cmd_labels ;;
   scaffold-ios) cmd_scaffold_ios "$@" ;;
   queue) cmd_queue ;;

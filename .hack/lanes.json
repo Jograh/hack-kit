@@ -2,6 +2,7 @@
   "project": "",
   "kit": "Jograh/hack-kit",
   "team": 4,
+  "stack": "",
   "branches": {
     "integration": "dev",
     "demo": "prod"

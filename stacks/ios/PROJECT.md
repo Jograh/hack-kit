@@ -1,4 +1,4 @@
-# iOS / Xcode: designing out the conflicts
+# The Xcode project: designing out the conflicts
 
 Xcode has three classic merge-conflict sources. Remove all three when the project is created, before lanes start.
 
@@ -31,11 +31,3 @@ Put these folder prefixes in `.hack/lanes.json` → `lanes.<name>.paths` (e.g. `
 Already in `.gitignore`: `xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `.build/`. Never commit them.
 
 Also owned by the lead lane, change-by-request only: `Assets.xcassets` (or give each lane its own asset catalog inside its folder, which is better), `Info.plist`, entitlements, `Package.resolved`.
-
-## Running
-
-`scripts/hack run` finds the project and scheme, builds into `~/Library/Caches/hack-kit/` (outside the repo, because iCloud-synced folders like Desktop break code signing), boots an iPhone simulator, installs, launches, and writes a screenshot to `.hack/state/last-run.png`. Pin a scheme or simulator in `.hack/lanes.json` → `run.scheme` / `run.simulator` if auto-detection picks the wrong one.
-
-Demo on a real phone: build to the device from Xcode on the demo Mac, from the latest `demo-*` tag, before the last 20 minutes.
-
-Teammate without a Mac: they can write Swift in their lane and ship; the lane-check runs in CI, but nothing compiles their code until a Mac pulls it. Pair them with a Mac lane that runs `scripts/hack run` after each of their ships, or give them a non-Swift lane (backend, data, prompts, the pitch).

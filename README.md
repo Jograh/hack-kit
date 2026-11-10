@@ -30,6 +30,7 @@ Built on [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT), ada
 - [Claude Code](https://claude.com/claude-code). The desktop app on a Mac gives you the built-in iOS simulator panel; the terminal works for everything else.
 - `git`, [`gh`](https://cli.github.com) (logged in: `gh auth login`) and `jq`.
 - Xcode, only if you are building an iOS app and want to run it. No Mac means no local testing: you ship, and a teammate with a Mac runs it.
+- To put an iOS app on a real iPhone: a cable and any Apple ID. A free one is enough; nobody needs a paid developer account.
 
 ## Begin
 
@@ -49,7 +50,14 @@ Open the folder in Claude Code and type:
 /hack-init
 ```
 
-It asks for the **team size (2 to 6)**, the repo name and your teammates' GitHub usernames, then sets up the `dev` and `prod` branches, labels, auto-merge and branch protection, and invites everyone. If you already know the stack, it scaffolds an empty app so day one starts at the idea.
+It asks for the **team size (2 to 6)**, the repo name and your teammates' GitHub usernames, then sets up the `dev` and `prod` branches, labels, auto-merge and branch protection, and invites everyone.
+
+It also asks which **kind of app** you're building:
+
+| Choice | What happens |
+|---|---|
+| **iOS** | Scaffolds an empty SwiftUI app whose Xcode project never conflicts, and confirms it opens in the simulator. Everything iOS-specific lives in [`stacks/ios/`](stacks/ios/README.md). |
+| **Other** | You say what it's made of ("FastAPI + Vite"), and the agent builds the start-up process for it, so "run it" brings up the servers and opens the page. See [`stacks/other/`](stacks/other/README.md). |
 
 Team size can be changed until the lanes are named: `scripts/hack team <n>`.
 
@@ -66,7 +74,11 @@ Team size can be changed until the lanes are named: `scripts/hack team <n>`.
 >
 > **You:** yes
 >
-> **Claude:** Repo ready: `dev` is the default branch, `prod` is the demo branch, and PRs into `dev` must pass the lane check. Your three teammates need to accept the invite. Do you already know the stack?
+> **Claude:** Repo ready: `dev` is the default branch, `prod` is the demo branch, and PRs into `dev` must pass the lane check. Your three teammates need to accept the invite. Is this an iOS app or something else?
+>
+> **You:** iOS, call it Recall. We'll demo on my phone.
+>
+> **Claude:** Recall is scaffolded and opens in the simulator. For the phone there's a one-time setup; first step: open Xcode → Settings → Accounts and sign in with your Apple ID. Tell me when that's done.
 
 </details>
 
@@ -194,6 +206,31 @@ Builds and launches the app. In the Claude desktop app it appears in the simulat
 
 </details>
 
+### "Put it on my phone" (iOS)
+
+Plug the iPhone in with a cable, unlock it, and say so. The app is built, installed and opened on the phone.
+
+The first time, there is a one-time setup of about ten minutes, and your chat walks you through it one step at a time: sign in to Xcode with an Apple ID, trust the Mac, turn on Developer Mode, trust your own certificate on the phone. Do it the night before. The full guide is [`stacks/ios/DEVICE.md`](stacks/ios/DEVICE.md).
+
+Signing details stay on your Mac and are never committed, so nobody's Apple account ends up in the project file. Your agent can't see a real phone, so it checks its own work in the simulator and asks you what the phone shows.
+
+<details open>
+<summary><b>In practice</b></summary>
+
+> **You:** put it on my phone
+>
+> **Claude:** Two things are missing: Developer Mode is off. On the phone, open Settings → Privacy & Security → Developer Mode, switch it on and restart. Tell me when it's back.
+>
+> **You:** done
+>
+> **Claude:** Installed on "Recall Demo Phone". iOS will say Untrusted Developer the first time: Settings → General → VPN & Device Management → your Apple ID → Trust. Then I'll launch it again.
+>
+> **You:** ok trusted
+>
+> **Claude:** Running on the phone. Does Home show the camera button and an empty feed?
+
+</details>
+
 ### "I need X from the camera lane"
 
 Your agent files a request on GitHub and keeps building against a stub of that lane's contract. The other lane's agent sees the request within a minute. You never wait on each other.
@@ -239,7 +276,8 @@ Agents log it with `scripts/hack feedback` and work around it. Nobody stops to f
 |---|---|---|
 | The golden path works end to end | `/hack-promote` | Performs every beat of `docs/DEMO.md`; if all pass, moves `prod` forward and tags it |
 | Before you present | "rehearse the demo" | Time to wow, dead air, single points of failure and their fallbacks, likely judge questions |
-| On stage | | Demo from `prod`, never from `dev`. A bad build? Check out the previous `demo-*` tag. |
+| Right after a promote (iOS) | "put the demo build on the phone" | Builds from a clean copy of `prod` and installs it on the demo iPhone |
+| On stage | | Demo from `prod`, never from `dev`. A bad build? Check out the previous `demo-*` tag. Keep the simulator ready on the Mac as the fallback. |
 
 ## After
 
@@ -272,6 +310,7 @@ Collects everything the agents logged about the kit, plus your own gripes, merge
 | `hack-orchestrate` | Everyone | "Work the queue": the main loop |
 | `hack-implement` | Everyone | Build one ticket in the chat, without workers |
 | `hack-run` | Everyone | "Run it" |
+| `hack-device` | Anyone with a Mac and an iPhone | "Put it on my phone": one-time setup, then build, install, launch |
 | `hack-ship` | Everyone | "Ship it" (the orchestrator does this for you) |
 | `hack-direction` | Everyone | A change of plan |
 | `demo-judge` | Everyone | Score an idea, a ticket, a change, or a rehearsal |
@@ -287,6 +326,9 @@ Your agent runs these for you; they also work from a terminal. `scripts/hack hel
 | Command | Does |
 |---|---|
 | `scripts/hack run` | Build and launch the app |
+| `scripts/hack run --device` | iOS: build, install and launch on the plugged-in iPhone (`--prod` for the promoted build) |
+| `scripts/hack device` | iOS: the one-time phone checklist |
+| `scripts/hack stack ios\|other` | Choose the kind of app |
 | `scripts/hack ship "msg" --closes <n>` | Commit → pull `dev` → PR → merged |
 | `scripts/hack queue` | Your lane's tickets: ready, in progress, needs you |
 | `scripts/hack request <lane> "need X"` | Ask another lane for something |
@@ -309,12 +351,14 @@ Your agent runs these for you; they also work from a terminal. `scripts/hack hel
 
 ```
 AGENTS.md / CLAUDE.md      the rules every agent loads
-.hack/lanes.json           team size, lanes (owner, folders, mission), run config
+.hack/lanes.json           team size, stack, lanes (owner, folders, mission), run config
 scripts/hack               the one CLI behind every skill and hook
 .claude/settings.json      hooks: lane guard, git guard, auto-sync, inbox
 .claude/agents/            the background worker
 .claude/skills/            the skills listed above
 .githooks/                 pre-commit lane check, pre-push prod guard
 .github/workflows/         lane check on every PR into dev
+stacks/ios/                the Xcode project layout, simulator, and real-iPhone guides
+stacks/other/              how the agent builds the start-up process for any other app
 docs/                      DEMO.md, decisions/, lanes/<lane>/CONTRACT.md; additive and shared
 ```
