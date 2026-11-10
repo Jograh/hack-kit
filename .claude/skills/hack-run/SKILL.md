@@ -14,13 +14,17 @@ One step for the user: they say "run it" (or type `/hack-run`) and the app appea
 
 The user tests by tapping in the panel. Tell them in one line what to try ("Tap the gear: Settings should slide up").
 
+## iOS, on a real iPhone
+
+The user says "on my phone" or "on the device" → call the Skill tool with "hack-device". That is for the user and the judges to look at; you still verify in the simulator.
+
 ## Everywhere else
 
 ```bash
 scripts/hack run
 ```
 
-It picks the right thing for this repo: the command in `.hack/lanes.json` → `run.command` if set; otherwise an Xcode project (builds, boots an iPhone simulator, opens the Simulator window, installs, launches, saves a screenshot to `.hack/state/last-run.png`); otherwise `npm run dev` (start that one in the background, then open the dev URL in the browser pane).
+It picks the right thing for this repo: the command in `.hack/lanes.json` → `run.command` if set; otherwise an Xcode project (builds, boots an iPhone simulator, opens the Simulator window, installs, launches, saves a screenshot to `.hack/state/last-run.png`); otherwise `npm run dev` (start that one in the background). On the `other` stack the command prints `open: <url>`: open that in the browser pane and look at the page. How this app starts, its ports and its logs are in `stacks/other/THIS-APP.md`.
 
 ## Verify, don't assume
 

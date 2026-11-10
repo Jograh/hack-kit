@@ -13,3 +13,7 @@ disable-model-invocation: true
 5. Report the new `demo-*` tag. That tag is the rollback point: on the demo machine, `git checkout <tag>` then `scripts/hack run`.
 
 Promote after every beat that newly works, not once at the end. In the last hour, promote only fixes; in the last 20 minutes, don't promote at all: the demo runs from the last tag.
+
+## The demo phone (iOS)
+
+Right after a successful promote, if the demo runs on a real iPhone, offer to put the promoted build on it: `scripts/hack run --device --prod` (the `hack-device` skill). It builds from a clean checkout of `prod`, so unshipped work in this folder can't leak into the demo. Ask the user to open the app on the phone and confirm the first beat.
