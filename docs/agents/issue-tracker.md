@@ -9,6 +9,7 @@ Tickets, requests and the map live as GitHub issues in this repo. Use the `gh` C
 | `lane:<name>` | The one lane that owns this ticket. Every ticket has exactly one. |
 | `ready-for-agent` | Fully specified: the orchestrator hands it to a background worker. |
 | `needs-human` | A person must decide or act. Never dispatched; surfaced to the user. |
+| `spec` | A lane's design, written by `/hack-spec`. Not built and not in the queue; `/hack-tickets` splits it into tickets and closes it. |
 | `request` | A cross-lane ask. Created with `scripts/hack request`. |
 | `broadcast` | Every lane's agent is shown activity on this issue. |
 | `hack:map` | The map: one issue, the index of the whole effort. |
