@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 Adapted from Matt Pocock's `wayfinder`. Same core idea (name the destination, chart a shared map on the issue tracker, leave the fog as fog) with three hackathon changes:
 
-- **The destination is always a demo**, never a spec: the 90 seconds a judge watches. Everything is planned backwards from it.
+- **The destination is a working app and the demo that shows it off**, never a spec. The demo is the 90 seconds a judge watches; the app is what's left in their hands when they go off script afterwards. Pick an idea small enough to build for real, then plan the demo around its strongest features.
 - **The map is cut into exactly one lane per person.** The team size (2 to 6) is `team` in `.hack/lanes.json`; check it with `scripts/hack team` and, if the room disagrees, fix it with `scripts/hack team <n>` before going further. Not one lane more or fewer than there are people. A lane is one person + one set of folders + one branch. Lanes are how everyone's agents work at once without a single merge conflict.
 - **It is one sitting, not many sessions.** The clock is the scarcest thing. Budget ~10% of the total hackathon time for this skill, and say the budget out loud at the start.
 
@@ -24,7 +24,7 @@ Call the Skill tool with "demo-judge" to score them. Show the table, recommend o
 
 ## 3. Name the destination: the demo script (10 min)
 
-Call the Skill tool with "grilling" on the winner: **two rounds maximum**, breadth-first, every question about what the judge sees, never about architecture. Then write `docs/DEMO.md`:
+Call the Skill tool with "grilling" on the winner: **two rounds maximum**, breadth-first, every question about what the judge sees and what they'll try next, never about architecture. Then write `docs/DEMO.md`:
 
 ```markdown
 # Demo: <name> — <one-sentence pitch>
@@ -33,12 +33,15 @@ Call the Skill tool with "grilling" on the winner: **two rounds maximum**, bread
 <the single thing the judges will remember>
 
 ## Golden path (≈90s)
-| # | Beat: what the judge sees | Lane | Real or staged |
-|---|---------------------------|------|----------------|
-| 1 | …                         | …    | real / staged: <how> |
+| # | Beat: what the judge sees | Lane | Why it's in the demo |
+|---|---------------------------|------|----------------------|
+| 1 | …                         | …    | <what this shows off> |
 
-## Staged honestly
-<what is hardcoded/mocked for the demo, and the one-line truthful answer if a judge asks>
+## Off script
+<the five things a judge is most likely to try or ask after the demo ("use my own", "what if it's empty", "is that live?"), and what the app does. All of these must work.>
+
+## Seed data
+<sample content preloaded so the app doesn't look empty, and the truthful one-line answer if a judge asks. Nothing else is faked.>
 
 ## Cut list
 <everything we decided NOT to build. Reopen only by editing this file.>
@@ -47,7 +50,7 @@ Call the Skill tool with "grilling" on the winner: **two rounds maximum**, bread
 <fog: decisions we can't make until something is built. One line each.>
 ```
 
-5–8 beats. Every beat is something visible. A beat that needs explaining is two beats or a cut.
+5–8 beats. Every beat is something visible, and every beat is a real feature of the app, chosen because it is among the most impressive things the app does. A beat that needs explaining is two beats or a cut.
 
 ## 4. Cut the lanes (10 min)
 
@@ -55,10 +58,10 @@ Rules, in priority order:
 
 1. **One lane per person, one owner each, disjoint folders.** Every path in the repo has exactly one owning lane. Anything not listed belongs to the lead lane.
    - **2 or 3 people:** the lead lane carries the shell *and* a feature area. Cut the demo script harder; fewer hands means fewer beats, not thinner ones.
-   - **5 or 6 people:** every lane must still own something a judge sees or the demo depends on. If the beats don't split that many ways, make the extra lanes about the demo itself rather than slicing a feature in two: a **stage** lane (seed data, replays, the fallback recording, the demo device) or a **pitch** lane (landing page, slides, the script and the Q&A answers). Two people in one feature folder is a merge conflict waiting to happen.
+   - **5 or 6 people:** every lane must still own something a judge sees or the demo depends on. If the beats don't split that many ways, make the extra lanes about the demo itself rather than slicing a feature in two: a **stage** lane (seed data, fallbacks for anything that depends on the network, off-script testing, the demo device) or a **pitch** lane (landing page, slides, the script and the Q&A answers). Two people in one feature folder is a merge conflict waiting to happen.
 2. **Cut by folder, along the demo.** Prefer lanes that each own whole beats (a screen, a service, the data/AI behind a beat) over layers ("frontend"/"backend") that force every beat through two people.
 3. **One lane is the lead lane**: it owns the app shell / composition root, root config, dependency manifests, `docs/DEMO.md`, and integration. Give it the lightest feature load.
-4. **Each lane publishes a contract and a stub.** `docs/lanes/<lane>/CONTRACT.md` says what the lane exposes (function/endpoint/view names, data shapes, example values) and what it consumes. Each lane's *first* ticket is a hardcoded stub of that contract, shipped within 30 minutes, so nobody ever waits on anybody.
+4. **Each lane publishes a contract and a stub.** `docs/lanes/<lane>/CONTRACT.md` says what the lane exposes (function/endpoint/view names, data shapes, example values) and what it consumes. Each lane's *first* ticket is a hardcoded stub of that contract, shipped within 30 minutes, so nobody ever waits on anybody. The stub is scaffolding: the lane replaces it with the real thing, and a beat isn't done while it still runs on one.
 5. **Balance by risk, not by size.** The lane carrying *the moment* goes to the fastest person and gets the least else.
 6. **Stack-specific conflict traps** are designed out here: see the stack's guide: `stacks/ios/PROJECT.md` for Xcode projects, `stacks/other/README.md` for anything else.
 

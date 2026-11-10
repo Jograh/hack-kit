@@ -4,7 +4,7 @@ A team of two to six, one agent each, one repo, one deadline. These rules exist 
 
 ## The goal
 
-A judge watches about 90 seconds. `docs/DEMO.md` is that 90 seconds, and it is the only definition of done. Optimise for what the judge **sees**: wow moment and demonstrability beat technical depth. Stage (hardcode, seed, replay) anything a judge can't tell from real; cut anything a judge won't see. When in doubt, use the `demo-judge` skill.
+Build **a working app, and a demo that shows off its best parts.** A judge watches about 90 seconds, then asks questions and goes off script: they try their own input, tap what you didn't plan for, ask whether it's live. So the app has to really work, and nothing is faked. `docs/DEMO.md` is the showcase: it picks the app's most impressive, most demonstrable features and puts them where a judge can't miss them. When time runs short, **cut scope, never fake it**: a smaller app that works beats a bigger one that only survives the script. Use the `demo-judge` skill to decide what gets the spotlight (SHOWCASE), what the app simply needs in order to work (SOLID), and what to drop (CUT).
 
 ## Lanes
 
@@ -58,8 +58,9 @@ scripts/hack ship "msg" --closes <n>      # commit → pull dev → PR → merge
 
 ## Hackathon engineering
 
-- Stub first, then real, then polish. A merged stub unblocks three people.
-- No tests for staged code, no abstractions for later, no refactors. Timebox bugs to 15 minutes, then stage around them.
+- Stub first, then real, then polish. A merged stub unblocks three people, but a stub is scaffolding: a beat that still runs on one is not done.
+- Real means it works with input the team didn't choose, and the obvious next tap doesn't crash or dead-end. Seed data (sample content, loaded through the app's real code paths) is fine; say what is seeded in `docs/DEMO.md`.
+- No abstractions for later, no refactors. Write a test only where it's faster than checking by hand (a parser, a scoring function); running the app is the main test. Timebox bugs to 15 minutes, then make the feature simpler or narrower. Don't paper over it.
 - New dependency = a request to the lead lane (manifests and lockfiles are where conflicts come from).
 - Keep secrets in `.env` (gitignored); put names only in `.env.example`.
 - The kit itself got in your way (a hook, a rule, a script)? `scripts/hack feedback "what" "details"`, work around it, carry on. It is logged on the kit repo for the next hackathon. Kit files belong to the lead lane; a fix there reaches everyone on their next sync.

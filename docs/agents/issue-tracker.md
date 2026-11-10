@@ -13,7 +13,7 @@ Tickets, requests and the map live as GitHub issues in this repo. Use the `gh` C
 | `request` | A cross-lane ask. Created with `scripts/hack request`. |
 | `broadcast` | Every lane's agent is shown activity on this issue. |
 | `hack:map` | The map: one issue, the index of the whole effort. |
-| `P0-golden-path` / `P1-real` / `P2-polish` | Priority: on the demo path / replace a stage with real / visible polish. |
+| `P0-golden-path` / `P1-real` / `P2-polish` | Priority: a demo beat working for real / holds up when a judge goes off script / polish on the showcase features. |
 
 There is no separate triage step: whoever writes a ticket gives it `ready-for-agent` or `needs-human`. `scripts/hack queue` shows a lane's tickets grouped that way.
 

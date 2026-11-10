@@ -683,8 +683,8 @@ cmd_labels() {
   gh label create hack:map  --color 5319e7 --description "The wayfinder map" --force >/dev/null
   gh label create spec      --color 5319e7 --description "A lane's design, written down before it is split into tickets" --force >/dev/null
   gh label create P0-golden-path --color b60205 --description "On the demo's golden path" --force >/dev/null
-  gh label create P1-real   --color e99695 --description "Replace a fake with the real thing" --force >/dev/null
-  gh label create P2-polish --color c5def5 --description "Polish a judge will notice" --force >/dev/null
+  gh label create P1-real   --color e99695 --description "Holds up when a judge goes off script" --force >/dev/null
+  gh label create P2-polish --color c5def5 --description "Polish on the showcase features" --force >/dev/null
   echo "  labels: ready-for-agent, needs-human, broadcast, request, hack:map, spec, P0-golden-path, P1-real, P2-polish"
 }
 

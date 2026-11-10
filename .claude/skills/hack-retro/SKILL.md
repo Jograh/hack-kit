@@ -26,7 +26,7 @@ Merge duplicates, then put each finding in one category:
 - **Orchestration**: dispatch, collect, the board, workers that needed a person too often.
 - **Run and test**: build, simulator, verification.
 - **Tickets and lanes**: tickets that crossed lanes, were too big, or weren't checkable alone; lane splits that caused requests.
-- **Judge focus**: time spent on things no judge saw; staging that should have happened sooner.
+- **Judge focus**: time spent on things that should have been cut; strong features that never made it into the demo; anything that broke when a judge went off script.
 - **Rules that did nothing**: instructions in `AGENTS.md` or a skill that no agent followed or needed. Removing them is an improvement.
 - **Fixed mid-event**: already solved in this repo, needs porting to the template (link the PR).
 

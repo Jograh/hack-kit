@@ -36,7 +36,7 @@ Never open the project in Xcode and pick a team under Signing & Capabilities and
 
 - **Installs expire after 7 days.** Reinstall on the day of the demo.
 - **Only a few new app ids per week.** Don't rename the app or change its bundle id during the event.
-- **Some capabilities are unavailable**, including push notifications, Sign in with Apple, iCloud and Apple Pay. If the idea needs one, stage it (`demo-judge` → STAGE) or one person buys a developer account before the event.
+- **Some capabilities are unavailable**, including push notifications, Sign in with Apple, iCloud and Apple Pay. If the idea needs one, design the app without it or one person buys a developer account before the event. Don't fake it.
 
 ## The demo phone
 

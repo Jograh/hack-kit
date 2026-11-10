@@ -20,7 +20,7 @@ Start as soon as they are *considering* it, not once they've decided.
    **After**  <one line>            <score>/60
    Gains: <what the judge sees that they didn't>
    Costs: <tickets thrown away, lanes that must change, hours>
-   Verdict: SWITCH | KEEP | SWITCH, BUT STAGE <x>   — <one-line reason>
+   Verdict: SWITCH | KEEP | SWITCH, BUT CUT <x>   — <one-line reason>
    ```
 
    This is an opinion. The user decides, and may overrule it.
