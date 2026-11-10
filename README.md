@@ -72,7 +72,7 @@ Team, at the end     /hack-promote
 Afterwards           /hack-retro
 ```
 
-Each step is a command you can type into your Claude Code chat. **Typing them is optional.** Once you've joined your lane, your orchestrator knows the workflow and invokes the same skills itself: say "let's design the feed" and it starts the interview, writes the spec when the design settles, splits it into tickets and starts building, telling you in a line as it moves from one step to the next. The commands are there for when you want to drive a step yourself.
+Each step is a command you can type into your Claude Code chat. **Typing them is optional.** Once you've joined your lane, **your orchestrator knows the workflow and invokes the same skills itself**: say "let's design the feed" and it starts the interview, writes the spec when the design settles, splits it into tickets and starts building, telling you in a line as it moves from one step to the next. The commands are there for when you want to drive a step yourself.
 
 Only the one-time setup commands have to be typed: `/hack-init`, `/hack-wayfinder`, `/hack-setup` and, afterwards, `/hack-retro`.
 
