@@ -33,6 +33,8 @@ Built on [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT), ada
 
 ## Begin
 
+The examples below follow a made-up team of four building **Recall**, an iOS app that remembers what you photograph. They show the shape of what you'll see, not exact output.
+
 ### 1. Lead, before the hackathon (10 minutes)
 
 Create your team's repo from this template:
@@ -51,6 +53,23 @@ It asks for the **team size (2 to 6)**, the repo name and your teammates' GitHub
 
 Team size can be changed until the lanes are named: `scripts/hack team <n>`.
 
+<details open>
+<summary><b>In practice</b></summary>
+
+> **You:** /hack-init
+>
+> **Claude:** How many people are on the team, including you (2 to 6)? What should the repo be called, public or private, and what are your teammates' GitHub usernames?
+>
+> **You:** 4 of us. acme/recall, private. maya-k, dsantos, priya-r
+>
+> **Claude:** Creating **acme/recall** (private) with four lanes and inviting maya-k, dsantos and priya-r. Go ahead?
+>
+> **You:** yes
+>
+> **Claude:** Repo ready: `dev` is the default branch, `prod` is the demo branch, and PRs into `dev` must pass the lane check. Your three teammates need to accept the invite. Do you already know the stack?
+
+</details>
+
 ### 2. Kick-off, whole team in the room (about 10% of your time)
 
 In the lead's chat:
@@ -67,6 +86,28 @@ In the lead's chat:
 | The lanes | One per person, each with its folders, its beats of the demo, and a contract saying what it exposes to the others |
 | Tickets | One lane each, marked either `ready-for-agent` (a worker can build it alone) or `needs-human` |
 
+<details open>
+<summary><b>In practice</b></summary>
+
+The demo script, `docs/DEMO.md`:
+
+| # | What the judge sees | Lane | Real or staged |
+|---|---|---|---|
+| 1 | Point the phone at a whiteboard, tap once | capture | real |
+| 2 | The photo lands in the feed, already titled and tagged | feed | staged: tags are seeded |
+| 3 | Ask "what did we decide on Tuesday?" and get the answer, with the photo | brain | real: this is the moment |
+
+The lanes, in `.hack/lanes.json`:
+
+| Lane | Owner | Folders | Exposes to the others |
+|---|---|---|---|
+| shell (lead) | you | `Recall/App/`, `Recall/Shared/` | the app shell, shared types |
+| capture | maya-k | `Recall/Capture/` | `CaptureView`, a saved `Photo` |
+| feed | dsantos | `Recall/Feed/` | `FeedView`, the list of items |
+| brain | priya-r | `Recall/Brain/` | `ask(question) -> Answer` |
+
+</details>
+
 ### 3. Every teammate, once (2 minutes)
 
 ```bash
@@ -80,6 +121,24 @@ Open the folder in Claude Code and type:
 ```
 
 You're on your lane's branch, your agent knows what it owns, and it briefs you on your first tickets.
+
+<details open>
+<summary><b>In practice</b></summary>
+
+> **maya-k:** /hack-setup
+>
+> **Claude:** You're the **capture** lane, on branch `lane/capture`.
+>
+> - **You own:** `Recall/Capture/` and `docs/lanes/capture/`. I can't write anywhere else.
+> - **Your beat:** #1, point the phone at a whiteboard and tap once.
+> - **You expose:** `CaptureView` and a saved `Photo`, used by feed and brain.
+> - **Your tickets:** #7 Stub the capture contract · #12 Camera capture · #13 Share sheet · #14 Onboarding copy (needs you)
+>
+> This chat runs your lane: background workers build the ready tickets, and anything that needs you shows up under **Needs you**. Start?
+>
+> **maya-k:** go
+
+</details>
 
 ## During the hackathon
 
@@ -96,13 +155,59 @@ Background workers build your `ready-for-agent` tickets, up to three at a time. 
 
 Answer the numbered items in a word ("1: A"). Keep brainstorming in the same chat while workers run.
 
+<details open>
+<summary><b>In practice</b></summary>
+
+> **maya-k:** work the queue
+>
+> **Claude:**
+> | Building | Ready to test | Needs you |
+> |---|---|---|
+> | #7 Capture stub | | 1. #14 Onboarding copy: A "Snap it, find it" or B "Never lose a whiteboard"? |
+> | #12 Camera capture | | |
+>
+> **maya-k:** 1: B. Also, could the shutter button pulse while it saves?
+>
+> **Claude:** Noted B on #14. A pulsing shutter is polish a judge would notice, so I've written it up as #19 and queued it behind the camera.
+>
+> *(a few minutes later)*
+>
+> **Claude:** Shipped #7.
+> | Building | Ready to test | Needs you |
+> |---|---|---|
+> | #19 Shutter pulse | #12 Camera capture: tap the shutter, the photo should appear as a thumbnail | |
+
+</details>
+
 ### "Run it"
 
 Builds and launches the app. In the Claude desktop app it appears in the simulator panel next to the chat, and you tap it yourself. The orchestrator also launches it on its own when something visible lands, and tells you what to try.
 
+<details open>
+<summary><b>In practice</b></summary>
+
+> **maya-k:** run it
+>
+> **Claude:** Running on iPhone 17 in the panel. I tapped the shutter and the thumbnail appeared. Try it yourself, then tap the thumbnail: the share sheet isn't wired yet, so nothing should happen.
+
+</details>
+
 ### "I need X from the camera lane"
 
 Your agent files a request on GitHub and keeps building against a stub of that lane's contract. The other lane's agent sees the request within a minute. You never wait on each other.
+
+<details open>
+<summary><b>In practice</b></summary>
+
+> **dsantos:** the feed needs a timestamp on every photo
+>
+> **Claude:** `Photo` belongs to the capture lane, so I've asked them for a `takenAt` date. Until they answer I'm building the feed against a hardcoded one.
+>
+> Meanwhile, in maya-k's chat:
+>
+> **Claude:** The feed lane asked for a `takenAt` date on `Photo`. It's a one-line addition in our lane, so I've added it, updated our contract and replied on the request.
+
+</details>
 
 ### "What if we changed…?"
 
