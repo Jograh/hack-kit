@@ -66,7 +66,7 @@ This is where the hackathon is spent. You design your part with your orchestrato
 |---|---|---|
 | Design | `/grill-me` | Your orchestrator interviews you about how your lane will deliver its beats (the steps of the demo that wayfinder assigned to you), until the design is clear. |
 | Write it down | `/hack-spec` | Turns that conversation into one short spec issue for your lane. No interview; it writes up what you already said. |
-| Split it | `/hack-tickets` | Breaks the spec into small tickets, each marked `ready-for-agent` (a worker can build it alone) or `needs-human` (it needs you). |
+| Split it | `/hack-tickets` | Breaks the spec into small tickets, each marked `ready-for-agent` (a worker can build it alone) or `needs-human` (it needs you). It only writes tickets for your own lane. If you need something from a teammate's lane, your orchestrator sends them a request instead, and keeps building against their stub. |
 | Build it | `/hack-orchestrate` | Hands the ready tickets to background workers, up to three at once. As each finishes, your chat merges it, runs the app, checks it, and ships it to `dev`. |
 
 While workers build, your chat shows a board and nothing else:
@@ -80,7 +80,9 @@ Answer the numbered items in a word ("1: A"), try what's ready, and keep designi
 Two steps the orchestrator runs for you, which you can also type yourself:
 
 - `/hack-run` builds and launches the app. In the Claude desktop app on a Mac it opens in the simulator panel next to the chat.
-- `/hack-ship` commits, pulls in your teammates' work, opens the PR into `dev` and merges it.
+- `/hack-ship` commits your work, opens the PR into `dev` and merges it.
+
+Your teammates' work doesn't wait for a ship. It is merged into your branch automatically every time you send a message, so you are always building on the latest `dev`.
 
 Prefer to build a ticket yourself in the chat, without workers? `/hack-implement`.
 
