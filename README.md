@@ -161,6 +161,7 @@ Answer the numbered items in a word ("1: A"). Keep brainstorming in the same cha
 > **maya-k:** work the queue
 >
 > **Claude:**
+>
 > | Building | Ready to test | Needs you |
 > |---|---|---|
 > | #7 Capture stub | | 1. #14 Onboarding copy: A "Snap it, find it" or B "Never lose a whiteboard"? |
@@ -173,6 +174,7 @@ Answer the numbered items in a word ("1: A"). Keep brainstorming in the same cha
 > *(a few minutes later)*
 >
 > **Claude:** Shipped #7.
+>
 > | Building | Ready to test | Needs you |
 > |---|---|---|
 > | #19 Shutter pulse | #12 Camera capture: tap the shutter, the photo should appear as a thumbnail | |
