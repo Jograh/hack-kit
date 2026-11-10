@@ -48,7 +48,7 @@ Creates the repo's `dev` and `prod` branches, labels, auto-merge and branch prot
 Turns the brief into a plan. Budget about 10% of your time. It produces:
 
 - **The idea**, chosen from several after each is scored the way a judge would score it.
-- **The demo script**, `docs/DEMO.md`: the 90 seconds a judge watches, beat by beat. This is the only definition of done.
+- **The demo script**, `docs/DEMO.md`: the 90 seconds a judge watches, written as 5 to 8 **beats**. A beat is one step of the demo: one thing the judge sees happen, such as "tap the camera button and the photo appears in the feed". This is the only definition of done.
 - **The lanes**: one per person. Each lane is a set of folders only that person's agent can write to, the beats of the demo it carries, and a contract saying what it exposes to the other lanes.
 - **One stub ticket per lane**: a hardcoded version of its contract, so nobody waits on anybody.
 
@@ -64,7 +64,7 @@ This is where the hackathon is spent. You design your part with your orchestrato
 
 | Step | Command | What it does |
 |---|---|---|
-| Design | `/grill-me` | Your orchestrator interviews you about how your lane will deliver its beats, until the design is clear. |
+| Design | `/grill-me` | Your orchestrator interviews you about how your lane will deliver its beats (the steps of the demo that wayfinder assigned to you), until the design is clear. |
 | Write it down | `/hack-spec` | Turns that conversation into one short spec issue for your lane. No interview; it writes up what you already said. |
 | Split it | `/hack-tickets` | Breaks the spec into small tickets, each marked `ready-for-agent` (a worker can build it alone) or `needs-human` (it needs you). |
 | Build it | `/hack-orchestrate` | Hands the ready tickets to background workers, up to three at once. As each finishes, your chat merges it, runs the app, checks it, and ships it to `dev`. |
