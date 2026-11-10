@@ -12,5 +12,8 @@ disable-model-invocation: true
    - The lane's **stub ticket** already exists and is `ready-for-agent`. Offer to start a worker on it right away, so the other lanes are unblocked while the user designs.
    - The rest of the lane is theirs to design, in this chat: `/grill-me` (talk through how the lane delivers its beats) → `/hack-spec` (write the design down) → `/hack-tickets` (split it into tickets) → `/hack-orchestrate` (workers build them; this chat tests and ships).
    - Anything that needs them appears under **Needs you**.
+6. Offer the heartbeat, once:
+   - **Lead lane**: recommend it. "Your lane receives everyone's requests. Want a heartbeat that checks for them every 5 minutes, even when you're not typing?" On yes, call the Skill tool with "loop" and `5m /hack-heartbeat` (or tell them to type `/loop 5m /hack-heartbeat`).
+   - **Any other lane**: one line, no recommendation: "Optional: `/loop 10m /hack-heartbeat` keeps this lane checking for requests while you're away."
 
 The lane guard, auto-sync and inbox hooks start working the moment setup finishes; nothing needs restarting.
