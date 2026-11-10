@@ -1,7 +1,6 @@
 ---
 name: hack-promote
-description: "Promote dev to prod: run the golden path, and if every beat performs, fast-forward the demo branch and tag it."
-disable-model-invocation: true
+description: "Promote dev to prod: run the golden path, and if every beat performs, fast-forward the demo branch and tag it. Use when the user types /hack-promote, says to promote or update the demo build, or answers yes to a \"Promote to prod?\" item. Never on a heartbeat tick, and never without the user's go-ahead at step 5."
 ---
 
 `prod` is the branch the demo runs from. Its only rule: **it is never broken.** It moves forward only from `dev`, only after the golden path has just been performed and the app has survived being poked at.

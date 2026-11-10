@@ -1,7 +1,6 @@
 ---
 name: hack-spec
-description: "Write down the design you just talked through for your lane as one short spec issue, ready to be split into tickets. No interview: it synthesises the conversation."
-disable-model-invocation: true
+description: "Write down the design you just talked through for your lane as one short spec issue, ready to be split into tickets. No interview: it synthesises the conversation. Use when the user types /hack-spec, says to write the design down or spec it, or when a design discussion in the lane has settled and the next step is tickets."
 ---
 
 Adapted from Matt Pocock's `to-spec`. Same rule: **do not interview the user**; synthesise what was already discussed (usually a `/grill-me` session in this chat). The hackathon changes: the spec covers **one lane**, it is written from the judge's seat, and it is short. No user stories, no testing plan.

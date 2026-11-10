@@ -1,7 +1,6 @@
 ---
 name: hack-tickets
-description: "Break your lane's spec (or the current conversation) into tickets a background worker can build, and publish them as GitHub issues under the map. At kick-off the lead uses it to publish one stub ticket per lane."
-disable-model-invocation: true
+description: "Break your lane's spec (or the current conversation) into tickets a background worker can build, and publish them as GitHub issues under the map. At kick-off the lead uses it to publish one stub ticket per lane. Use when the user types /hack-tickets, says to split or break something into tickets, or right after a spec is published."
 ---
 
 Adapted from Matt Pocock's `to-tickets`. Still tracer bullets: each ticket is a thin, complete, demoable slice. The hackathon change: **a ticket never crosses a lane.** Work that spans lanes is split at the contract, one ticket per side, and neither side blocks the other because both build against the stub.

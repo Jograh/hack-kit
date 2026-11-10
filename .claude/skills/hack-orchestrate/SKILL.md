@@ -53,14 +53,14 @@ Never answer a human question on the user's behalf, and never let a worker do so
 
 `/hack-wayfinder` only decided which lanes exist, which beats each carries and what each exposes. **How** this lane delivers its beats is designed here, by the user, with you. The stub ticket is the only one that exists at the start; build it while the design happens.
 
-The path, each step a command the user can type:
+The path. Each step is a command the user *can* type, but they don't have to: when the conversation reaches a step, say in one line that you're moving to it and call that skill yourself with the Skill tool ("grilling" for the interview, then "hack-spec", then "hack-tickets"). Don't make the user remember command names.
 
 1. `/grill-me`: talk the design through. Cover what a judge sees, what they're likely to try off script, and what the contract needs; two rounds at most. When an idea firms up, call the Skill tool with "demo-judge" (Mode 2) for a SHOWCASE / SOLID / CUT verdict.
 2. `/hack-spec`: write the result down as one spec issue for the lane.
 3. `/hack-tickets`: split the spec into tickets for this lane.
 4. Back to the loop above: dispatch them.
 
-When the queue is empty and the lane's beats aren't done, don't invent tickets: tell the user the next step is `/grill-me`. The same path repeats for every new chunk of work.
+When the queue is empty and the lane's beats aren't done, don't invent tickets: tell the user the next piece needs designing and start the interview. The same path repeats for every new chunk of work.
 
 Shortcuts:
 

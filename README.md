@@ -6,6 +6,40 @@ Hackathons are lost to merge conflicts, to waiting on each other, and to demos t
 
 Built on [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT). His flow is `/grill-me` → `/to-spec` → `/to-tickets` → `/implement`. This is the same flow, adapted for a team and a deadline.
 
+## Why it's built this way
+
+### #1: Merge conflicts
+
+**The problem.** Four agents writing to one repo will collide, and resolving a conflict at 3am costs more than the feature.
+
+**The fix** is lanes. Every folder has exactly one owner, listed in `.hack/lanes.json`. Writing outside your lane is blocked three times: by a Claude hook, a git pre-commit hook, and a CI check on every PR. Shared files (config, dependencies, the app shell) belong to the lead's lane.
+
+### #2: Waiting on each other
+
+**The problem.** "I can't start until the API is done."
+
+**The fix** is contracts and stubs. Each lane publishes `docs/lanes/<lane>/CONTRACT.md` and ships a hardcoded stub of it first. Need something from another lane? Your agent files a request on GitHub and keeps building against the stub; their agent sees it within a minute.
+
+### #3: Drifting apart
+
+**The problem.** Branches diverge, and plans change without everyone hearing.
+
+**The fix** is that nothing is manual. A hook merges `dev` into your branch every time you prompt. Shipping opens and merges the PR on its own. Requests and changes of direction are GitHub issues that hooks push into the right agent's context.
+
+### #4: A demo that only works on script
+
+**The problem.** Teams build for the 90 seconds and fake the rest. Then a judge says "can I try my own?" and it falls over. Or the opposite: the app works, but six hours went into login and settings, and the impressive part is buried.
+
+**The fix** is one rule and one skill. The rule: the app really works, and when time runs short you **cut scope, never fake it**. A smaller app that holds up beats a bigger one that only survives the script. The skill, `/demo-judge`, sorts every feature into showcase, solid or cut, so the effort goes to what judges will remember and to what they'll run into when they poke around.
+
+What's allowed, because it's honest: sample data so the app doesn't look empty, a cached fallback in case the venue wifi dies, and hardcoded stubs while lanes are still being built. A stub is scaffolding; a beat isn't done until it runs on the real thing.
+
+### #5: A broken demo
+
+**The problem.** It worked an hour ago.
+
+**The fix** is `prod`. It only moves when the whole demo has just been performed and poked at off script, and every move is tagged.
+
 ## Quick start
 
 You need [Claude Code](https://claude.com/claude-code), `git`, [`gh`](https://cli.github.com) (logged in) and `jq`. Xcode too, if you're building an iOS app.
@@ -38,7 +72,9 @@ Team, at the end     /hack-promote
 Afterwards           /hack-retro
 ```
 
-Every step is a command you type into your Claude Code chat.
+Each step is a command you can type into your Claude Code chat. **Typing them is optional.** Once you've joined your lane, your orchestrator knows the workflow and invokes the same skills itself: say "let's design the feed" and it starts the interview, writes the spec when the design settles, splits it into tickets and starts building, telling you in a line as it moves from one step to the next. The commands are there for when you want to drive a step yourself.
+
+Only the one-time setup commands have to be typed: `/hack-init`, `/hack-wayfinder`, `/hack-setup` and, afterwards, `/hack-retro`.
 
 ### 1. `/hack-init` (lead, before the hackathon)
 
@@ -125,72 +161,38 @@ Collects everything that went wrong with the kit itself and files it as issues o
 | `/research` | You need facts: an API, what a device can do. |
 | `/diagnosing-bugs` | Something is broken and the cause isn't obvious. |
 
-You don't have to type the slash for these or for `/hack-run`, `/hack-ship` and `/hack-orchestrate`. Saying "run it" or "what if we changed the feed to a map?" reaches the same skill.
-
-## Why it's built this way
-
-### #1: Merge conflicts
-
-**The problem.** Four agents writing to one repo will collide, and resolving a conflict at 3am costs more than the feature.
-
-**The fix** is lanes. Every folder has exactly one owner, listed in `.hack/lanes.json`. Writing outside your lane is blocked three times: by a Claude hook, a git pre-commit hook, and a CI check on every PR. Shared files (config, dependencies, the app shell) belong to the lead's lane.
-
-### #2: Waiting on each other
-
-**The problem.** "I can't start until the API is done."
-
-**The fix** is contracts and stubs. Each lane publishes `docs/lanes/<lane>/CONTRACT.md` and ships a hardcoded stub of it first. Need something from another lane? Your agent files a request on GitHub and keeps building against the stub; their agent sees it within a minute.
-
-### #3: Drifting apart
-
-**The problem.** Branches diverge, and plans change without everyone hearing.
-
-**The fix** is that nothing is manual. A hook merges `dev` into your branch every time you prompt. Shipping opens and merges the PR on its own. Requests and changes of direction are GitHub issues that hooks push into the right agent's context.
-
-### #4: A demo that only works on script
-
-**The problem.** Teams build for the 90 seconds and fake the rest. Then a judge says "can I try my own?" and it falls over. Or the opposite: the app works, but six hours went into login and settings, and the impressive part is buried.
-
-**The fix** is one rule and one skill. The rule: the app really works, and when time runs short you **cut scope, never fake it**. A smaller app that holds up beats a bigger one that only survives the script. The skill, `/demo-judge`, sorts every feature into showcase, solid or cut, so the effort goes to what judges will remember and to what they'll run into when they poke around.
-
-What's allowed, because it's honest: sample data so the app doesn't look empty, a cached fallback in case the venue wifi dies, and hardcoded stubs while lanes are still being built. A stub is scaffolding; a beat isn't done until it runs on the real thing.
-
-### #5: A broken demo
-
-**The problem.** It worked an hour ago.
-
-**The fix** is `prod`. It only moves when the whole demo has just been performed and poked at off script, and every move is tagged.
+None of these need the slash. Saying "run it" or "what if we changed the feed to a map?" reaches the same skill, and your orchestrator also reaches for them on its own when the moment fits.
 
 ## Reference
 
 ### Skills
 
-**You type these** (they only run when you ask):
+**Typed once** (they only run when you ask):
 
 | Skill | Who | What |
 |---|---|---|
 | `/hack-init` | Lead | Create the repo, set team size and kind of app |
 | `/hack-wayfinder` | Lead | Brief → idea → demo script → lanes → stub tickets |
 | `/hack-setup` | Everyone | Join your lane after cloning |
-| `/grill-me` | Everyone | Get interviewed about a design until it's clear |
-| `/hack-spec` | Everyone | Write the design down as a spec issue for your lane |
-| `/hack-tickets` | Everyone | Split a spec into tickets for your lane |
-| `/hack-promote` | Anyone | Move `prod` forward after performing the demo |
 | `/hack-retro` | Lead | File kit improvements after the event |
 | `/handoff` | Everyone | Compact the chat so a fresh one can continue |
 
-**You type these, or the agent reaches for them** when the moment fits:
+**Type them, or let your orchestrator invoke them** when the moment fits:
 
 | Skill | What |
 |---|---|
+| `/grill-me` | Get interviewed about a design until it's clear |
+| `/hack-spec` | Write the design down as a spec issue for your lane |
+| `/hack-tickets` | Split a spec into tickets for your lane |
 | `/hack-orchestrate` | Run the lane: dispatch workers, merge, test, ship |
 | `/hack-heartbeat` | One timed check-in for the lane; run it with `/loop 5m /hack-heartbeat` |
 | `/hack-implement` | Build one ticket in the chat, without workers |
 | `/hack-run` | Build and launch the app |
 | `/hack-ship` | Commit → pull `dev` → PR → merged |
+| `/hack-promote` | Move `prod` forward after performing the demo; always asks you first |
 | `/hack-direction` | Change the plan and tell every agent |
 | `/hack-device` | iOS: install on a real iPhone |
-| `/demo-judge` | Score an idea, a ticket, a change, or a rehearsal |
+| `/demo-judge` | Showcase, solid or cut; before-and-after; rehearsal |
 | `/prototype`, `/research`, `/diagnosing-bugs`, `/domain-modeling` | Unmodified from Matt Pocock |
 
 ### Commands
