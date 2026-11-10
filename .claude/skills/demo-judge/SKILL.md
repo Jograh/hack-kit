@@ -16,7 +16,7 @@ Score each idea 1–5 per row; total = Σ score × weight (max 60).
 | **Wow moment** | 3 | One visible instant that gets a reaction, in the first 30 seconds | Value appears only after explanation |
 | **Demonstrability** | 3 | Runs live, on stage, visibly, and a judge could drive it | Needs slides, a backstory, or "imagine that…" |
 | **Criteria fit** | 2 | Hits the top-weighted judging criteria and a sponsor prize | Good project, wrong hackathon |
-| **Demo-path feasibility** | 2 | Four people in parallel reach a working golden path with half the time left | Critical path runs through one person or one unknown |
+| **Demo-path feasibility** | 2 | The whole team in parallel reaches a working golden path with half the time left | Critical path runs through one person or one unknown |
 | **Story** | 1 | Problem → magic → payoff fits one sentence | Needs a paragraph |
 | **Stage safety** | 1 | Survives bad wifi, a cold start, a nervous presenter | Depends on a live third party behaving |
 
