@@ -12,7 +12,7 @@ This chat is the **orchestrator** for one lane. The user talks only to you: they
    - Commit or ship your own uncommitted changes first: a worker's worktree starts from the last commit.
 3. **Keep talking to the user while workers run.** Brainstorm, write tickets, answer questions. Never wait idle and never poll; you are notified when a worker finishes.
 4. **When a worker reports**, in this order:
-   - `STATUS: done` → `scripts/hack collect <BRANCH>` (merges it into the lane branch, removes the worktree) → run it (see Testing) → check the report's TO VERIFY list against what you actually see → `scripts/hack ship "<what the judge now sees>" --closes <n>`.
+   - `STATUS: done` → `scripts/hack collect <BRANCH>` (merges it into the lane branch, removes the worktree) → run it (see Testing) → check the report's TO VERIFY list against what you actually see, and try the ticket's *Off script* checks (a different input, the obvious next tap) → `scripts/hack ship "<what the judge now sees>" --closes <n>`.
    - The result isn't reachable in the app yet (a screen nothing links to) → the build passing plus the code matching the Done-when list is enough to ship; verify it visually when the wiring lands, and say so.
    - Shipping while the previous PR is still open adds to that PR rather than opening a new one. That's fine; both tickets close when it merges.
    - It doesn't work when you run it → send the same worker back with what you saw (it still has its context), or fix a one-liner yourself. Don't ship it.
@@ -55,7 +55,7 @@ Never answer a human question on the user's behalf, and never let a worker do so
 
 The path, each step a command the user can type:
 
-1. `/grill-me`: talk the design through. Keep it to what a judge sees and what the contract needs; two rounds at most. When an idea firms up, call the Skill tool with "demo-judge" (Mode 2) for a REAL / STAGE / CUT verdict.
+1. `/grill-me`: talk the design through. Cover what a judge sees, what they're likely to try off script, and what the contract needs; two rounds at most. When an idea firms up, call the Skill tool with "demo-judge" (Mode 2) for a SHOWCASE / SOLID / CUT verdict.
 2. `/hack-spec`: write the result down as one spec issue for the lane.
 3. `/hack-tickets`: split the spec into tickets for this lane.
 4. Back to the loop above: dispatch them.

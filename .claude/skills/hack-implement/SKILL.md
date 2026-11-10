@@ -10,8 +10,8 @@ Adapted from Matt Pocock's `implement`. The hackathon change: the unit of done i
 1. **Pick.** If the user named a ticket, use it. Otherwise run `scripts/hack inbox --all` and take the first open, unclaimed ticket for your lane: `P0-golden-path` before `P1-real` before `P2-polish`; `request` tickets from teammates jump the queue when they are small. State the ticket's title before starting.
 2. **Claim.** `gh issue edit <n> --add-assignee @me`. First write, before any code.
 3. **Read.** The ticket and its comments, `docs/DEMO.md` (the beat you serve), your own `docs/lanes/<lane>/CONTRACT.md`, and the CONTRACT of any lane you consume.
-4. **Build, inside your lane.** Stub first, then fill in. If the ticket says STAGE, stage it: hardcode, seed, or replay, and note it under *Staged honestly* in your lane docs (`docs/lanes/<lane>/STAGED.md`). No tests for staged code. No abstractions "for later". There is no later.
-5. **Run it.** `scripts/hack run`, then look at the result (the screenshot it writes, the simulator, or the browser) and check the ticket's *Done when* list. Fix until the beat performs. If it breaks, call the Skill tool with "diagnosing-bugs" — but timebox it: 15 minutes, then stage around the bug and write down what you did.
+4. **Build, inside your lane.** Stub first, then make it real: it must work with input nobody planned for, not just the demo's. If you add seed data, load it through the app's real code paths and list it in `docs/lanes/<lane>/SEEDED.md`, along with any stub still standing. No abstractions "for later". There is no later.
+5. **Run it.** `scripts/hack run`, then look at the result (the screenshot it writes, the simulator, or the browser) and check the ticket's *Done when* and *Off script* lists: try a different input, the obvious next tap, and going back. Fix until the beat performs and survives that. If it breaks, call the Skill tool with "diagnosing-bugs" — but timebox it: 15 minutes, then make the feature simpler or narrower so the bug can't happen, and write down what you did. Don't hide it behind a hardcoded result.
 6. **Ship.** `scripts/hack ship "<what the judge now sees>" --closes <n>`. That commits, pulls dev, opens the PR and merges it. If you changed your CONTRACT, say so in a comment on the ticket and name the consuming lanes: `gh issue comment <n> --body "..."`.
 7. **Next.** Go to 1. Ship small and often: a merged stub beats an unmerged masterpiece, and every merge is what keeps the other three lanes unblocked.
 
@@ -29,4 +29,4 @@ Hooks put teammates' merges and new issue activity into your context as `SYNC:` 
 
 ## Scope creep
 
-If, mid-ticket, you or the user think of something extra, call the Skill tool with "demo-judge" (Mode 2). REAL/STAGE → new ticket (`gh issue create` with your lane label). CUT → one line in a new file under `docs/lanes/<lane>/`. Then back to the ticket in hand.
+If, mid-ticket, you or the user think of something extra, call the Skill tool with "demo-judge" (Mode 2). SHOWCASE/SOLID → new ticket (`gh issue create` with your lane label). CUT → one line in a new file under `docs/lanes/<lane>/`. Then back to the ticket in hand.

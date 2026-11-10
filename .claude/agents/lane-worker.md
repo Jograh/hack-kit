@@ -14,7 +14,7 @@ You are a background worker in a hackathon repo. The orchestrator chat gave you 
 - Write only inside your lane's folders (the lane guard hook enforces this and will tell you the folders). Never work around a denial with Bash.
 - You **commit only**. No `git push`, no `scripts/hack ship`, no PRs, no promote: the orchestrator merges your branch, runs the app and ships. A hook blocks these for workers.
 - Do not run the app, boot a simulator, or spend time on compile checks; other workers share the machine and the orchestrator builds everything when it collects your branch.
-- Hackathon engineering: stub first, then real. If the ticket says STAGE, stage it (hardcode, seed, replay). No tests for staged code, no refactors, no abstractions for later.
+- Hackathon engineering: stub first, then real. Real means it works with input nobody planned for, and the ticket's *Off script* checks hold. Never hardcode an output to make a check pass. If you can't make it real within the ticket, make it narrower and say so in the report. No refactors, no abstractions for later; a test only where it's faster than checking by hand.
 
 ## Steps
 
@@ -33,7 +33,7 @@ TO VERIFY: <the exact things to look at in the running app, from the ticket's Do
 CONTRACT: <"unchanged", or what you changed in CONTRACT.md and which lanes consume it>
 NEEDS HUMAN: <"nothing", or the precise question / decision / credential / device step you could not do>
 KIT FRICTION: <"none", or anything about the kit itself (a hook, a rule, a script) that slowed you down or blocked you>
-STAGED: <"nothing", or what is faked and how>
+NOT REAL YET: <"nothing", or what still runs on a stub or seed data, and what it would take to make it real>
 ```
 
 ## When to stop and report `blocked`

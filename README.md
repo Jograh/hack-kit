@@ -2,7 +2,7 @@
 
 Claude Code skills for a hackathon team of **2 to 6 people**.
 
-Hackathons are lost to merge conflicts, to waiting on each other, and to building things no judge ever sees. This kit gives every person their own lane and their own chat, merges everyone's work automatically, and checks every decision from the judge's seat.
+Hackathons are lost to merge conflicts, to waiting on each other, and to demos that fall apart the moment a judge asks to try it themselves. This kit gives every person their own lane and their own chat, merges everyone's work automatically, and aims at one thing: **a working app, and a demo that shows off its best parts.**
 
 Built on [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT). His flow is `/grill-me` → `/to-spec` → `/to-tickets` → `/implement`. This is the same flow, adapted for a team and a deadline.
 
@@ -48,8 +48,8 @@ Creates the repo's `dev` and `prod` branches, labels, auto-merge and branch prot
 
 Turns the brief into a plan. Budget about 10% of your time. It produces:
 
-- **The idea**, chosen from several after each is scored the way a judge would score it.
-- **The demo script**, `docs/DEMO.md`: the 90 seconds a judge watches, written as 5 to 8 **beats**. A beat is one step of the demo: one thing the judge sees happen, such as "tap the camera button and the photo appears in the feed". This is the only definition of done.
+- **The idea**, chosen from several after each is scored the way a judge would score it, including whether it can be built for real in the time you have.
+- **The demo script**, `docs/DEMO.md`: the 90 seconds a judge watches, written as 5 to 8 **beats**. A beat is one step of the demo: one thing the judge sees happen, such as "tap the camera button and the photo appears in the feed". The script is a showcase, not the product: it picks the app's most impressive features and puts them where a judge can't miss them. It also lists what a judge is likely to try afterwards, off script, because that has to work too.
 - **The lanes**: one per person. Each lane is a set of folders only that person's agent can write to, the beats of the demo it carries, and a contract saying what it exposes to the other lanes.
 - **One stub ticket per lane**: a hardcoded version of its contract, so nobody waits on anybody.
 
@@ -108,7 +108,7 @@ A heartbeat closes that gap by checking in on a timer:
 
 ### 5. `/hack-promote` (team, when the demo works end to end)
 
-Performs every beat of `docs/DEMO.md`. If they all pass, it moves `prod` forward and tags it. You demo from `prod`, never from `dev`; if a build goes bad, the previous tag is one checkout away.
+Performs every beat of `docs/DEMO.md`, then goes off script the way a judge would: a different input, the obvious next tap, going back, a cold relaunch. If everything holds, it moves `prod` forward and tags it. You demo from `prod`, never from `dev`; if a build goes bad, the previous tag is one checkout away.
 
 ### 6. `/hack-retro` (after the event)
 
@@ -118,7 +118,7 @@ Collects everything that went wrong with the kit itself and files it as issues o
 
 | Command | Use it when |
 |---|---|
-| `/demo-judge` | "Is this worth building?" Verdict: build it for **real**, **stage** it (hardcode, seed, replay), or **cut** it. Also rehearses the demo. |
+| `/demo-judge` | "Is this worth building?" Verdict: **showcase** (a highlight: build it, polish it, put it in the demo), **solid** (the app needs it to really work: build it simply) or **cut**. It never says fake it. Also rehearses the demo, including what a judge will try off script. |
 | `/hack-direction` | The plan changes. Shows before and after from the judge's seat; once you approve, it is recorded and sent to every teammate's agent. Anyone can do this. |
 | `/hack-device` | iOS: put the app on a real iPhone over a cable. A free Apple ID is enough. Do the one-time setup the night before; see [`stacks/ios/DEVICE.md`](stacks/ios/DEVICE.md). |
 | `/prototype` | A design question you can't settle by talking. |
@@ -147,17 +147,19 @@ You don't have to type the slash for these or for `/hack-run`, `/hack-ship` and 
 
 **The fix** is that nothing is manual. A hook merges `dev` into your branch every time you prompt. Shipping opens and merges the PR on its own. Requests and changes of direction are GitHub issues that hooks push into the right agent's context.
 
-### #4: Building what no judge sees
+### #4: A demo that only works on script
 
-**The problem.** The team spends six hours on an auth system that appears in the demo for zero seconds.
+**The problem.** Teams build for the 90 seconds and fake the rest. Then a judge says "can I try my own?" and it falls over. Or the opposite: the app works, but six hours went into login and settings, and the impressive part is buried.
 
-**The fix** is `/demo-judge` at every decision. The demo script is the definition of done, and anything a judge can't tell from real gets staged.
+**The fix** is one rule and one skill. The rule: the app really works, and when time runs short you **cut scope, never fake it**. A smaller app that holds up beats a bigger one that only survives the script. The skill, `/demo-judge`, sorts every feature into showcase, solid or cut, so the effort goes to what judges will remember and to what they'll run into when they poke around.
+
+What's allowed, because it's honest: sample data so the app doesn't look empty, a cached fallback in case the venue wifi dies, and hardcoded stubs while lanes are still being built. A stub is scaffolding; a beat isn't done until it runs on the real thing.
 
 ### #5: A broken demo
 
 **The problem.** It worked an hour ago.
 
-**The fix** is `prod`. It only moves when the whole demo has just been performed, and every move is tagged.
+**The fix** is `prod`. It only moves when the whole demo has just been performed and poked at off script, and every move is tagged.
 
 ## Reference
 
