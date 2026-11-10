@@ -1,0 +1,22 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+		AA0000000000000000000001 /* __APP__.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = __APP__.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000002 /* __APP__ */ = {isa = PBXFileSystemSynchronizedRootGroup; path = __APP__; sourceTree = "<group>"; };
+		AA0000000000000000000003 = {isa = PBXGroup; children = (AA0000000000000000000002, AA0000000000000000000004); sourceTree = "<group>"; };
+		AA0000000000000000000004 /* Products */ = {isa = PBXGroup; children = (AA0000000000000000000001); name = Products; sourceTree = "<group>"; };
+		AA0000000000000000000005 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000006 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000007 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AA0000000000000000000008 /* __APP__ */ = {isa = PBXNativeTarget; buildConfigurationList = AA000000000000000000000C; buildPhases = (AA0000000000000000000005, AA0000000000000000000006, AA0000000000000000000007); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (AA0000000000000000000002); name = __APP__; productName = __APP__; productReference = AA0000000000000000000001; productType = "com.apple.product-type.application"; };
+		AA0000000000000000000009 /* Project */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; }; buildConfigurationList = AA000000000000000000000D; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = AA0000000000000000000003; preferredProjectObjectVersion = 77; productRefGroup = AA0000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (AA0000000000000000000008); };
+		AA000000000000000000000A /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.hackkit.__BUNDLE__; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+		AA000000000000000000000B /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		AA000000000000000000000C = {isa = XCConfigurationList; buildConfigurations = (AA000000000000000000000A); defaultConfigurationName = Debug; };
+		AA000000000000000000000D = {isa = XCConfigurationList; buildConfigurations = (AA000000000000000000000B); defaultConfigurationName = Debug; };
+	};
+	rootObject = AA0000000000000000000009;
+}

@@ -1,0 +1,25 @@
+# hackathon kit — per-person state
+.hack/local.json
+.hack/state/
+.claude/settings.local.json
+
+# build output
+.build
+build/
+DerivedData/
+node_modules/
+dist/
+.next/
+
+# Xcode per-user noise (a classic merge-conflict source)
+xcuserdata/
+*.xcuserstate
+.DS_Store
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# background workers
+.claude/worktrees/

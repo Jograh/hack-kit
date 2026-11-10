@@ -1,0 +1,861 @@
+#!/usr/bin/env bash
+# hack — the one CLI behind the hackathon kit. Hooks, skills and humans all call this.
+# Needs: git, gh (authenticated), jq. Works on macOS's stock bash 3.2.
+set -u
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CFG="$ROOT/.hack/lanes.json"
+LOCAL="$ROOT/.hack/local.json"
+STATE="$ROOT/.hack/state"
+cd "$ROOT" || exit 1
+
+# In a git worktree, local.json lives in the main checkout.
+if [ ! -f "$LOCAL" ]; then
+  common="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+  if [ -n "$common" ] && [ -f "$(dirname "$common")/.hack/local.json" ]; then
+    LOCAL="$(dirname "$common")/.hack/local.json"
+  fi
+fi
+
+die()  { echo "hack: $*" >&2; exit 1; }
+warn() { echo "hack: $*" >&2; }
+cfg()  { jq -r "$1" "$CFG" 2>/dev/null; }
+
+INTEG="$(cfg '.branches.integration // "dev"')"; [ -n "$INTEG" ] || INTEG=dev
+DEMO="$(cfg '.branches.demo // "prod"')";        [ -n "$DEMO" ]  || DEMO=prod
+
+my_lane() {
+  if [ -n "${HACK_LANE:-}" ]; then echo "$HACK_LANE"; return; fi
+  [ -f "$LOCAL" ] && jq -r '.lane // empty' "$LOCAL" 2>/dev/null
+}
+my_login() { [ -f "$LOCAL" ] && jq -r '.login // empty' "$LOCAL" 2>/dev/null; }
+lead()     { cfg '.lead // empty'; }
+lane_exists() { [ "$(jq -r --arg l "$1" '.lanes[$l] != null' "$CFG" 2>/dev/null)" = "true" ]; }
+lane_paths()  { jq -r --arg l "$1" '.lanes[$l].paths // [] | join(", ")' "$CFG" 2>/dev/null; }
+has_remote()  { git remote get-url origin >/dev/null 2>&1; }
+current_branch() { git symbolic-ref --quiet --short HEAD 2>/dev/null; }
+in_git_op() {
+  local g; g="$(git rev-parse --git-dir 2>/dev/null)" || return 1
+  [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ] || [ -e "$g/CHERRY_PICK_HEAD" ]
+}
+repo_slug() {
+  mkdir -p "$STATE"
+  if [ ! -s "$STATE/repo" ]; then
+    gh repo view --json nameWithOwner -q .nameWithOwner > "$STATE/repo" 2>/dev/null || { rm -f "$STATE/repo"; return 1; }
+  fi
+  cat "$STATE/repo"
+}
+# throttled <name> <seconds>: true (0) when called again too soon.
+throttled() {
+  local f="$STATE/$1.ts" now last
+  now="$(date +%s)"; last="$(cat "$f" 2>/dev/null || echo 0)"
+  [ $((now - last)) -lt "$2" ] && return 0
+  mkdir -p "$STATE"; echo "$now" > "$f"; return 1
+}
+
+# ───────────────────────────── lanes ─────────────────────────────
+
+# owner_of <repo-relative path> → lane name | @lead | @additive
+owner_of() {
+  jq -r --arg p "$1" '
+    . as $c
+    | ([ $c.lanes | to_entries[] | .key as $k | .value.paths[]?
+         | select(length > 0) | select(. as $pre | $p | startswith($pre))
+         | {k: $k, n: length} ] | sort_by(-.n) | .[0].k) as $hit
+    | if $hit then $hit
+      elif ($p | startswith("docs/lanes/")) then
+        ($p | split("/")[2]) as $l | if $c.lanes[$l] then $l else "@lead" end
+      elif ($p | startswith("docs/")) then "@additive"
+      else "@lead" end' "$CFG"
+}
+
+# check_path <rel path> <is_new 0|1> <lane> → 0 if lane may write it; else sets DENY / OWNER.
+check_path() {
+  DENY=""; OWNER="$(owner_of "$1")"
+  [ "$OWNER" = "$3" ] && return 0
+  case "$1" in .hack/local.json|.hack/state/*|.claude/settings.local.json) return 0 ;; esac
+  git check-ignore -q -- "$1" 2>/dev/null && return 0
+  local ld; ld="$(lead)"
+  # The lead scaffolds and cleans up: it may ADD or DELETE files anywhere, but never edit another lane's existing file.
+  [ "$3" = "$ld" ] && [ "$2" != 0 ] && return 0
+  case "$OWNER" in
+    @additive)
+      [ "$2" = 1 ] && return 0
+      [ "$3" = "$ld" ] && return 0
+      DENY="docs/ is additive — add a NEW file, or write under docs/lanes/$3/, instead of editing an existing shared doc"; OWNER="$ld" ;;
+    @lead)
+      [ "$3" = "$ld" ] && return 0
+      DENY="is a shared/root file owned by the lead lane '$ld'"; OWNER="$ld" ;;
+    *) DENY="belongs to lane '$OWNER'" ;;
+  esac
+  return 1
+}
+
+# lane-check --staged | --range A...B | <files...>   [--lane X]
+cmd_lane_check() {
+  local mode=files range="" lane="" files=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --staged) mode=staged ;;
+      --range)  mode=range; range="$2"; shift ;;
+      --lane)   lane="$2"; shift ;;
+      *) files+=("$1") ;;
+    esac; shift
+  done
+  [ -n "$lane" ] || lane="$(my_lane)"
+  [ -n "$lane" ] || { echo "lane-check: no lane set (run scripts/hack setup) — skipping"; return 0; }
+  lane_exists "$lane" || { echo "lane-check: '$lane' is not a lane in .hack/lanes.json — skipping"; return 0; }
+
+  local list bad=0 st p p2
+  case "$mode" in
+    staged) list="$(git diff --cached --name-status -M)" ;;
+    range)  list="$(git diff --name-status -M "$range")" ;;
+    files)  list=""; for p in ${files[@]+"${files[@]}"}; do
+              if [ -e "$p" ]; then list="$list"$'M\t'"$p"$'\n'; else list="$list"$'A\t'"$p"$'\n'; fi
+            done ;;
+  esac
+  while IFS=$'\t' read -r st p p2; do
+    [ -n "$st" ] || continue
+    case "$st" in
+      A*) check_path "$p" 1 "$lane" || { echo "  ✗ $p — $DENY"; bad=1; } ;;
+      D*) check_path "$p" 2 "$lane" || { echo "  ✗ $p — $DENY"; bad=1; } ;;
+      R*|C*) check_path "$p" 0 "$lane"  || { echo "  ✗ $p — $DENY"; bad=1; }
+             check_path "$p2" 1 "$lane" || { echo "  ✗ $p2 — $DENY"; bad=1; } ;;
+      *)  check_path "$p" 0 "$lane" || { echo "  ✗ $p — $DENY"; bad=1; } ;;
+    esac
+  done <<EOF
+$list
+EOF
+  if [ "$bad" = 1 ]; then
+    echo "LANE CHECK FAILED for lane '$lane' (allowed: $(lane_paths "$lane"), docs/lanes/$lane/, new files in docs/)."
+    echo "Need a change outside your lane? scripts/hack request <lane> \"what you need\""
+    return 1
+  fi
+  return 0
+}
+
+# ───────────────────────────── sync ─────────────────────────────
+
+# sync [--throttle N]: merge origin/dev into the current lane branch. Never leaves a half-merge behind.
+cmd_sync() {
+  local thr=0
+  [ "${1:-}" = "--throttle" ] && thr="${2:-30}"
+  has_remote || return 0
+  if [ "$thr" -gt 0 ]; then throttled sync "$thr" && return 0; fi
+  git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=6 fetch -q origin "$INTEG" 2>/dev/null || return 0
+  local behind br
+  behind="$(git rev-list --count "HEAD..origin/$INTEG" 2>/dev/null || echo 0)"
+  [ "$behind" -gt 0 ] || return 0
+  br="$(current_branch)"
+  if in_git_op; then echo "SYNC: $INTEG has $behind new commit(s) but a merge/rebase is in progress here — finish it, then run scripts/hack sync."; return 1; fi
+  case "$br" in
+    lane/*|"$INTEG") ;;
+    *) echo "SYNC: $INTEG has $behind new commit(s); not auto-merging because you are on '${br:-detached HEAD}', not a lane branch."; return 0 ;;
+  esac
+  local summary files
+  summary="$(git log --format='  %h %s (%an)' "HEAD..origin/$INTEG" | head -12)"
+  files="$(git diff --name-only "HEAD...origin/$INTEG" | head -25)"
+  if ! git merge-tree --write-tree HEAD "origin/$INTEG" >/dev/null 2>&1; then
+    echo "SYNC BLOCKED: merging $INTEG into $br would conflict. Nothing was changed."
+    echo "Conflicting files:"; git merge-tree --write-tree --name-only HEAD "origin/$INTEG" 2>/dev/null | sed -n '2,/^$/p' | sed 's/^/  /' | head -20
+    echo "A conflict means someone wrote outside their lane. Resolve with the human: keep the OWNING lane's version (scripts/hack status shows owners)."
+    return 1
+  fi
+  local out
+  if out="$(git merge --no-edit -q "origin/$INTEG" 2>&1)"; then
+    echo "SYNC: pulled $behind new commit(s) from $INTEG into $br:"
+    echo "$summary"
+    [ -n "$files" ] && { echo "Files changed by teammates:"; echo "$files" | sed 's/^/  /'; }
+    echo "$files" | grep -q '^docs/lanes/.*/CONTRACT.md$' && echo "NOTE: a lane CONTRACT changed — re-read it if you consume that lane."
+    return 0
+  fi
+  echo "SYNC SKIPPED: $INTEG has $behind new commit(s) but git refused to merge (your uncommitted edits overlap incoming files). Nothing was changed."
+  echo "$out" | head -8
+  return 1
+}
+
+# ───────────────────────────── inbox ─────────────────────────────
+
+# inbox [--all] [--throttle N]: issue activity addressed to my lane since the last look.
+cmd_inbox() {
+  local all=0 thr=0
+  while [ $# -gt 0 ]; do case "$1" in --all) all=1 ;; --throttle) thr="$2"; shift ;; esac; shift; done
+  command -v gh >/dev/null 2>&1 || return 0
+  has_remote || return 0
+  local lane me repo
+  lane="$(my_lane)"; [ -n "$lane" ] || return 0
+  me="$(my_login)"
+  if [ "$thr" -gt 0 ]; then throttled inbox "$thr" && return 0; fi
+  repo="$(repo_slug)" || return 0
+  mkdir -p "$STATE"
+  local since now
+  since="$(cat "$STATE/inbox_since" 2>/dev/null || true)"
+  # Look back 2 minutes past "now" on the next read (clock skew / API lag); ids in inbox_seen prevent repeats.
+  now="$(date -u -v-120S +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '120 seconds ago' +%Y-%m-%dT%H:%M:%SZ)"
+
+  # First incremental check with no baseline: start the clock silently. Only --all prints the ticket list,
+  # so hooks never mistake a listing for new activity.
+  if [ "$all" = 0 ] && [ -z "$since" ]; then echo "$now" > "$STATE/inbox_since"; return 0; fi
+  if [ "$all" = 1 ]; then
+    local open
+    open="$(gh issue list --repo "$repo" --state open --limit 60 --json number,title,labels,assignees 2>/dev/null \
+      | jq -r --arg lane "$lane" '
+        map(select([.labels[].name] | (index("lane:" + $lane) != null) or (index("broadcast") != null)))
+        | sort_by(.number) | .[]
+        | "  #\(.number) \(.title)  [\([.labels[].name] | join(","))]\(if (.assignees | length) > 0 then "  → @" + ([.assignees[].login] | join(",@")) else "  (unclaimed)" end)"' 2>/dev/null)" || open=""
+    echo "$now" > "$STATE/inbox_since"
+    if [ -n "$open" ]; then
+      echo "OPEN TICKETS for lane '$lane' (+ broadcasts):"; echo "$open"
+      echo "Read one: gh issue view <n> --comments"
+    else
+      echo "No open tickets for lane '$lane'."
+    fi
+    return 0
+  fi
+
+  local t1="$STATE/.issues.json" t2="$STATE/.comments.json" out
+  gh api "repos/$repo/issues?state=all&since=$since&per_page=100" > "$t1" 2>/dev/null || return 0
+  gh api "repos/$repo/issues/comments?since=$since&per_page=100" > "$t2" 2>/dev/null || return 0
+  out="$(jq -rn --slurpfile i "$t1" --slurpfile c "$t2" --arg me "$me" --arg lane "$lane" --arg since "$since" '
+    def mine: ([.labels[].name] | (index("lane:" + $lane) != null) or (index("broadcast") != null))
+              or (.user.login == $me) or ([.assignees[].login] | index($me) != null);
+    ($i[0] | map(select(.pull_request | not)) | map(select(mine))) as $rel
+    | ($rel | map({key: (.number | tostring), value: .}) | from_entries) as $by
+    | ( [ $rel[] | select(.created_at > $since and .user.login != $me)
+          | {k: "i\(.number)", t: "● NEW #\(.number) \(.title) [\([.labels[].name] | join(","))] — from @\(.user.login)\n\((.body // "") | .[0:700])"} ]
+      + [ $c[0][] | select(.user.login != $me and .created_at > $since)
+          | (.issue_url | split("/") | last) as $n | select($by[$n])
+          | {k: "c\(.id)", t: "● COMMENT on #\($n) \($by[$n].title) — @\(.user.login): \(.body | .[0:700])"} ]
+      + [ $rel[] | select(.closed_at != null and .closed_at > $since)
+          # only closures worth interrupting for: a request I filed with another lane got resolved
+          | select(.user.login == $me and ([.labels[].name] | index("lane:" + $lane) == null)) | {k: "x\(.number)-\(.closed_at)", t: "● CLOSED #\(.number) \(.title)"} ] )
+    | .[] | @base64' 2>/dev/null)" || out=""
+  local seen="$STATE/inbox_seen" fresh="" row k
+  touch "$seen"
+  for row in $out; do
+    k="$(echo "$row" | base64 -d 2>/dev/null | jq -r .k)"
+    grep -qxF "$k" "$seen" && continue
+    echo "$k" >> "$seen"
+    fresh="$fresh$(echo "$row" | base64 -d | jq -r .t)"$'\n'
+  done
+  out="${fresh%$'\n'}"
+  echo "$now" > "$STATE/inbox_since"
+  if [ -n "$out" ]; then
+    echo "INBOX — new GitHub issue activity for lane '$lane':"
+    echo "$out"
+    echo "(Full thread: gh issue view <n> --comments · Reply: gh issue comment <n> --body \"...\")"
+  fi
+  return 0
+}
+
+# ───────────────────────────── hooks ─────────────────────────────
+
+json_context() { # <event> <text>
+  jq -n --arg e "$1" --arg t "$2" '{hookSpecificOutput: {hookEventName: $e, additionalContext: $t}}'
+}
+
+cmd_hook() {
+  local ev="${1:-}" input lane
+  input="$(cat 2>/dev/null || true)"
+  lane="$(my_lane)"
+  [ -e "$STATE/debug" ] && echo "$input" | jq -c --arg ev "$ev" '{ev: $ev} + (del(.tool_input.content, .tool_input.new_string, .tool_input.old_string, .tool_response))' >> "$STATE/hook-debug.jsonl" 2>/dev/null
+  case "$ev" in
+    session-start)
+      if [ -z "$lane" ]; then
+        echo "HACKATHON KIT: this workspace is not set up yet. Lane guard, auto-sync and inbox are OFF."
+        echo "Tell the user to run /hack-setup (teammate) — or /hack-init then /hack-wayfinder if they are the lead starting the project."
+        return 0
+      fi
+      echo "HACKATHON KIT — you are lane '$lane' (@$(my_login)) on branch '$(current_branch)'. Lead lane: $(lead)."
+      echo "You may write only: $(lane_paths "$lane"), docs/lanes/$lane/, and NEW files under docs/."
+      cmd_sync
+      cmd_direction 3
+      if [ "$(jq -r '.orchestrate // false' "$LOCAL" 2>/dev/null)" = "true" ]; then
+        echo "ORCHESTRATOR MODE is on: you manage this lane from this one chat (see the hack-orchestrate skill). Queue:"
+        cmd_queue 2>/dev/null; rm -f "$STATE/inbox_since"; cmd_inbox >/dev/null
+      else
+        cmd_inbox --all
+      fi
+      ;;
+    user-prompt)
+      [ -n "$lane" ] || return 0
+      cmd_sync --throttle 20; cmd_inbox --throttle 20
+      ;;
+    post-tool)
+      [ -n "$lane" ] || return 0
+      [ -n "$(echo "$input" | jq -r '.agent_id // empty' 2>/dev/null)" ] && return 0
+      local out; out="$(cmd_sync --throttle 90; cmd_inbox --throttle 90)"
+      [ -n "$out" ] && json_context PostToolUse "$out"
+      ;;
+    stop)
+      [ -n "$lane" ] || return 0
+      [ "$(echo "$input" | jq -r '.stop_hook_active // false' 2>/dev/null)" = "true" ] && return 0
+      local out; out="$(cmd_inbox --throttle 45)"
+      if [ -z "$out" ] && [ "$(jq -r '.orchestrate // false' "$LOCAL" 2>/dev/null)" = "true" ] && ! throttled queue 60; then
+        local q; q="$(cmd_queue 2>/dev/null)"
+        if echo "$q" | grep -q '^READY'; then
+          jq -n --arg r "Orchestrator: unclaimed ready-for-agent tickets remain in your lane. Dispatch lane-worker subagents for them (at most 3 running at once), or tell the user in one line why you are not. Queue:
+$q" '{decision: "block", reason: $r}'
+          return 0
+        fi
+      fi
+      if [ -n "$out" ]; then
+        jq -n --arg r "Before you stop: teammates posted on your lane's issues. Read them and either act (if it is small and in your lane) or tell the user what was asked.
+$out" '{decision: "block", reason: $r}'
+      fi
+      ;;
+    lane-guard)
+      [ -n "$lane" ] || return 0
+      local fp rel
+      fp="$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null)"
+      [ -n "$fp" ] || return 0
+      local d top
+      d="$(dirname "$fp")"; while [ ! -d "$d" ] && [ "$d" != "/" ]; do d="$(dirname "$d")"; done
+      top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || return 0
+      [ "$(git -C "$top" rev-parse --git-common-dir 2>/dev/null | xargs -I{} sh -c 'cd "$1" && cd "{}" && pwd -P' _ "$top")" = "$(cd "$(git rev-parse --git-common-dir)" && pwd -P)" ] || return 0
+      case "$fp" in "$top"/*) rel="${fp#"$top"/}" ;; *) return 0 ;; esac
+      local isnew=1; [ -e "$fp" ] && isnew=0
+      check_path "$rel" "$isnew" "$lane" && return 0
+      jq -n --arg r "LANE GUARD: '$rel' $DENY. You are lane '$lane' and may write only: $(lane_paths "$lane"), docs/lanes/$lane/, and new files under docs/. Do NOT work around this with Bash. If you need this change: scripts/hack request $OWNER \"<what you need and why>\" — then keep going by stubbing against docs/lanes/$OWNER/CONTRACT.md inside your own lane." \
+        '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
+      ;;
+    git-guard)
+      local c; c="$(echo "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)"
+      [ -n "$c" ] || return 0
+      local why="" E='([^A-Za-z0-9_./-]|$)' worker
+      worker="$(echo "$input" | jq -r '.agent_id // empty' 2>/dev/null)"
+      if [ -n "$worker" ] && echo "$c" | grep -Eq "git( [^;&|]*)? push$E|hack +(ship|promote|collect|init|decide)$E|gh +pr +(create|merge)$E"; then
+        why="background workers only commit to their own worktree branch — the orchestrator merges, runs and ships. Finish your commit and report back"
+      elif echo "$c" | grep -Eq "git( [^;&|]*)? push( [^;&|]*)? (--force|-f|--force-with-lease)$E"; then why="force-push is never allowed"
+      elif echo "$c" | grep -Eq "git( [^;&|]*)? push [^;&|]*(:| |/)($DEMO|$INTEG)$E"; then why="never push to '$DEMO' or '$INTEG' directly — ship with: scripts/hack ship \"message\""
+      elif echo "$c" | grep -Eq 'git +reset +--hard|git +clean +-[a-z]*f|git +checkout +(-- +)?\.( |$)|git +restore +\.( |$)|git +branch +-D|git +stash +(drop|clear)'; then why="destructive git command — it can wipe a teammate's merged work or your uncommitted work"
+      elif echo "$c" | grep -Eq 'git +rebase'; then why="no rebasing during the hackathon — lane branches merge, never rebase"
+      elif echo "$c" | grep -Eq -- '--no-verify'; then why="--no-verify skips the lane check"
+      elif echo "$c" | grep -Eq 'gh +repo +(delete|rename|archive)'; then why="repo-level change"
+      fi
+      if [ -n "$why" ]; then
+        jq -n --arg r "GIT GUARD: blocked — $why. Use scripts/hack sync / ship instead, or ask the human." \
+          '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
+        return 0
+      fi
+      if echo "$c" | grep -Eq "hack +decide$E"; then
+        jq -n --arg r "Broadcast a direction change to the whole team. Only after the user has signed off on this exact wording." \
+          '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: $r}}'
+      elif echo "$c" | grep -Eq 'hack +promote'; then
+        jq -n --arg r "Promote $INTEG → $DEMO (the demo branch). Only do this if the golden path was just run end-to-end." \
+          '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: $r}}'
+      fi
+      ;;
+    *) die "unknown hook '$ev'" ;;
+  esac
+  return 0
+}
+
+# ───────────────────────────── setup ─────────────────────────────
+
+cmd_setup() {
+  local want="${1:-}" ok=1
+  echo "── Hackathon workspace setup ──"
+  for t in git gh jq; do
+    command -v "$t" >/dev/null 2>&1 && echo "  ✓ $t" || { echo "  ✗ $t missing — install it (macOS: brew install $t)"; ok=0; }
+  done
+  [ "$ok" = 1 ] || die "install the missing tools, then re-run."
+  gh auth status >/dev/null 2>&1 || die "GitHub CLI is not logged in — run: gh auth login"
+  local login; login="$(gh api user --jq .login 2>/dev/null)" || die "could not read your GitHub login"
+  echo "  ✓ GitHub login: @$login"
+  if command -v xcodebuild >/dev/null 2>&1; then echo "  ✓ Xcode: $(xcodebuild -version 2>/dev/null | head -1)"
+  else echo "  – No Xcode: you can build & ship, but can't run an iOS app locally. Ask a Mac teammate to verify (scripts/hack request)."; fi
+
+  local lane="$want"
+  [ -n "$lane" ] || lane="$(jq -r --arg u "$login" '.lanes | to_entries[] | select((.value.owner // "") | ascii_downcase == ($u | ascii_downcase)) | .key' "$CFG" | head -1)"
+  if [ -z "$lane" ]; then
+    echo; echo "Your login isn't assigned a lane yet. Lanes:"
+    jq -r '.lanes | to_entries[] | "  \(.key)  owner=@\(.value.owner // "?" | if . == "" then "unassigned" else . end)  — \(.value.mission // "")"' "$CFG"
+    die "re-run with your lane:  scripts/hack setup <lane>"
+  fi
+  lane_exists "$lane" || die "'$lane' is not a lane in .hack/lanes.json"
+
+  mkdir -p "$STATE"
+  jq -n --arg lane "$lane" --arg login "$login" '{lane: $lane, login: $login, orchestrate: true}' > "$ROOT/.hack/local.json"
+  LOCAL="$ROOT/.hack/local.json"
+  git config core.hooksPath .githooks
+  git config pull.rebase false
+  git config merge.conflictStyle zdiff3 2>/dev/null || true
+  chmod +x "$ROOT/scripts/hack" "$ROOT"/.githooks/* 2>/dev/null || true
+
+  local br="lane/$lane"
+  if has_remote; then
+    git fetch -q origin 2>/dev/null || warn "fetch failed (offline?)"
+    if [ "$(current_branch)" != "$br" ]; then
+      if git show-ref --verify --quiet "refs/heads/$br"; then git checkout -q "$br"
+      elif git show-ref --verify --quiet "refs/remotes/origin/$br"; then git checkout -q -b "$br" --track "origin/$br"
+      else git checkout -q -b "$br" "origin/$INTEG" 2>/dev/null || git checkout -q -b "$br"; fi
+    fi
+    rm -f "$STATE/sync.ts"; cmd_sync || true
+  else
+    [ "$(current_branch)" = "$br" ] || git checkout -q -b "$br" 2>/dev/null || git checkout -q "$br"
+    warn "no 'origin' remote yet — the lead needs to run: scripts/hack init <org/repo>"
+  fi
+  mkdir -p "$ROOT/docs/lanes/$lane"
+  echo
+  echo "✓ You are lane '$lane' on branch '$br'."
+  echo "  You own: $(lane_paths "$lane"), docs/lanes/$lane/"
+  echo "  Loop:  scripts/hack run  →  scripts/hack ship \"what changed\""
+  echo
+  rm -f "$STATE/inbox_since"; cmd_inbox --all
+}
+
+cmd_status() {
+  local lane; lane="$(my_lane)"
+  echo "You: lane '${lane:-NOT SET UP}' (@$(my_login)) on '$(current_branch)'   lead lane: $(lead)"
+  if has_remote; then
+    git fetch -q origin 2>/dev/null || true
+    echo "vs $INTEG: $(git rev-list --count "origin/$INTEG..HEAD" 2>/dev/null || echo ?) ahead, $(git rev-list --count "HEAD..origin/$INTEG" 2>/dev/null || echo ?) behind   |   $DEMO is $(git rev-list --count "origin/$DEMO..origin/$INTEG" 2>/dev/null || echo ?) commit(s) behind $INTEG"
+  fi
+  echo "Lanes:"
+  jq -r '.lanes | to_entries[] | "  \(.key)  @\(.value.owner // "" | if . == "" then "unassigned" else . end)  [\(.value.paths | join(", "))]  \(.value.mission // "")"' "$CFG"
+  if has_remote && command -v gh >/dev/null 2>&1; then
+    echo "Open tickets per lane:"
+    gh issue list --state open --limit 200 --json labels 2>/dev/null \
+      | jq -r '[.[].labels[].name | select(startswith("lane:"))] | group_by(.) | map("  \(.[0]): \(length)") | .[]' 2>/dev/null
+  fi
+}
+
+# ───────────────────────────── orchestration ─────────────────────────────
+
+# queue: my lane's open tickets, grouped by what should happen to them.
+cmd_queue() {
+  local lane repo; lane="$(my_lane)"; [ -n "$lane" ] || die "no lane set"
+  repo="$(repo_slug)" || die "no GitHub repo"
+  gh issue list --repo "$repo" --state open --limit 100 --label "lane:$lane" --json number,title,labels,assignees 2>/dev/null | jq -r '
+    def line: "  #\(.number) \(.title)  [\([.labels[].name | select(startswith("P"))] | join(","))]\(if (.assignees|length) > 0 then "  → @" + ([.assignees[].login] | join(",@")) else "" end)";
+    def has($l): [.labels[].name] | index($l) != null;
+    sort_by(([.labels[].name | select(startswith("P"))] | sort | .[0]) // "P9", .number) as $all
+    | ($all | map(select((.assignees|length) == 0 and has("ready-for-agent") and (has("needs-human")|not)))) as $ready
+    | ($all | map(select(has("needs-human")))) as $human
+    | ($all | map(select((.assignees|length) > 0 and (has("needs-human")|not)))) as $wip
+    | ($all | map(select((.assignees|length) == 0 and (has("ready-for-agent")|not) and (has("needs-human")|not)))) as $raw
+    | (if ($ready|length) > 0 then "READY for a worker (\($ready|length)):", ($ready[] | line) else empty end),
+      (if ($wip|length) > 0 then "IN PROGRESS (\($wip|length)):", ($wip[] | line) else empty end),
+      (if ($human|length) > 0 then "NEEDS YOU (\($human|length)):", ($human[] | line) else empty end),
+      (if ($raw|length) > 0 then "UNSORTED — label ready-for-agent or needs-human (\($raw|length)):", ($raw[] | line) else empty end),
+      (if ($all|length) == 0 then "Queue empty." else empty end)'
+}
+
+cmd_orchestrate() {
+  [ -f "$LOCAL" ] || die "run scripts/hack setup first"
+  case "${1:-}" in
+    on)  jq '.orchestrate = true'  "$LOCAL" > "$LOCAL.tmp" && mv "$LOCAL.tmp" "$LOCAL"; echo "Orchestration ON: this chat keeps dispatching workers while ready-for-agent tickets remain." ;;
+    off) jq '.orchestrate = false' "$LOCAL" > "$LOCAL.tmp" && mv "$LOCAL.tmp" "$LOCAL"; echo "Orchestration OFF: workers are dispatched only when you ask." ;;
+    *)   echo "orchestrate: $(jq -r '.orchestrate // false' "$LOCAL")   (scripts/hack orchestrate on|off)" ;;
+  esac
+}
+
+# collect <worker-branch>: merge a finished worker's branch into the lane branch and remove its worktree.
+cmd_collect() {
+  local wb="${1:-}" br; br="$(current_branch)"
+  [ -n "$wb" ] || die "usage: scripts/hack collect <worker-branch>"
+  git show-ref --verify --quiet "refs/heads/$wb" || die "no branch '$wb'"
+  case "$br" in lane/*) ;; *) die "run this from your lane branch (you are on '$br')" ;; esac
+  in_git_op && die "a merge is in progress — finish it first"
+  local n; n="$(git rev-list --count "HEAD..$wb")"
+  if [ "$n" -gt 0 ]; then
+    cmd_lane_check --range "HEAD...$wb" || die "worker branch '$wb' has out-of-lane changes — not merged."
+    if ! git merge-tree --write-tree HEAD "$wb" >/dev/null 2>&1; then
+      echo "COLLECT BLOCKED: '$wb' conflicts with $br (two workers touched the same file). Nothing was changed."
+      git merge-tree --write-tree --name-only HEAD "$wb" 2>/dev/null | sed -n '2,/^$/p' | sed 's/^/  /' | head -20
+      echo "Send the later worker back to redo its change on top of the current lane branch, or resolve it with the user."
+      return 1
+    fi
+    git merge --no-edit -q "$wb" || die "merge refused (uncommitted edits overlap) — commit or ship first, then collect again"
+    echo "✓ Collected $n commit(s) from $wb into $br:"; git log --format='  %h %s' "ORIG_HEAD..HEAD" --no-merges | head -10
+  else
+    echo "Nothing to collect from $wb (no new commits)."
+  fi
+  local wt; wt="$(git worktree list --porcelain | awk -v b="refs/heads/$wb" '/^worktree /{p=substr($0,10)} $0=="branch "b{print p}')"
+  [ -n "$wt" ] && git worktree remove --force "$wt" 2>/dev/null
+  git branch -q -D "$wb" 2>/dev/null || true
+  echo "Next: scripts/hack run, check the ticket's Done-when list, then scripts/hack ship \"...\" --closes <n>"
+}
+
+# ───────────────────────────── ship / request / promote ─────────────────────────────
+
+# ship ["message"] [--closes N] [--no-check]
+cmd_ship() {
+  local msg="" closes="" nocheck=0
+  while [ $# -gt 0 ]; do
+    case "$1" in --closes) closes="$2"; shift ;; --no-check) nocheck=1 ;; *) msg="$1" ;; esac; shift
+  done
+  local lane br; lane="$(my_lane)"; br="$(current_branch)"
+  [ -n "$lane" ] || die "no lane set — run scripts/hack setup"
+  [ "$br" = "lane/$lane" ] || die "you are on '$br', expected 'lane/$lane' — run scripts/hack setup"
+  has_remote || die "no origin remote"
+  in_git_op && die "a merge is in progress — finish it first"
+
+  git add -A
+  if ! cmd_lane_check --staged; then git reset -q; die "nothing shipped. Revert or move the out-of-lane changes above, then ship again."; fi
+  if ! git diff --cached --quiet; then
+    git commit -q -m "${msg:-$lane: checkpoint}${closes:+ (#$closes)}" || die "commit failed"
+  fi
+  rm -f "$STATE/sync.ts"; cmd_sync || die "sync failed — see above. Nothing was pushed."
+  local check; check="$(cfg '.run.check // empty')"
+  if [ -n "$check" ] && [ "$nocheck" = 0 ]; then
+    echo "check: $check"
+    ( eval "$check" ) || die "check failed — fix it or (only if you are sure dev won't break) ship with --no-check"
+  fi
+  if [ "$(git rev-list --count "origin/$INTEG..HEAD")" = 0 ]; then echo "Nothing to ship — $br has no commits that $INTEG lacks."; return 0; fi
+  git push -q -u origin "$br" || die "push failed"
+
+  local title pr body
+  title="[$lane] ${msg:-$(git log -1 --format=%s)}"
+  body="Lane: \`$lane\` · auto-shipped by \`scripts/hack ship\`.${closes:+
+
+Closes #$closes}"
+  local verb="opened"
+  pr="$(gh pr list --head "$br" --base "$INTEG" --state open --json number -q '.[0].number' 2>/dev/null)"
+  [ -n "$pr" ] && verb="updated (it was still open, so this ship rides along with the previous one)"
+  if [ -z "$pr" ]; then
+    gh pr create --base "$INTEG" --head "$br" --title "$title" --body "$body" >/dev/null || die "could not open PR"
+    pr="$(gh pr list --head "$br" --base "$INTEG" --state open --json number -q '.[0].number')"
+  elif [ -n "$closes" ]; then
+    gh pr edit "$pr" --body "$(gh pr view "$pr" --json body -q .body)
+
+Closes #$closes" >/dev/null 2>&1 || true
+  fi
+  if gh pr merge "$pr" --merge --auto >/dev/null 2>&1; then
+    local st; st="$(gh pr view "$pr" --json state -q .state 2>/dev/null)"
+    if [ "$st" = "MERGED" ]; then echo "✓ Shipped: PR #$pr merged into $INTEG."
+    else echo "✓ PR #$pr $verb; it auto-merges into $INTEG as soon as the lane-check passes (~30s)."; fi
+  elif gh pr merge "$pr" --merge >/dev/null 2>&1; then
+    echo "✓ Shipped: PR #$pr merged into $INTEG."
+  else
+    echo "⚠ PR #$pr is open but did not merge. Look: gh pr view $pr --web   (checks: gh pr checks $pr)"
+    return 1
+  fi
+  git fetch -q origin "$INTEG" 2>/dev/null || true
+  echo "Teammates' agents pull this automatically on their next prompt."
+}
+
+# request <lane> "title" ["details"]
+cmd_request() {
+  local to="${1:-}" title="${2:-}" details="${3:-}"
+  [ -n "$to" ] && [ -n "$title" ] || die 'usage: scripts/hack request <lane> "title" ["details"]'
+  lane_exists "$to" || die "'$to' is not a lane (see scripts/hack status)"
+  local lane owner; lane="$(my_lane)"; owner="$(jq -r --arg l "$to" '.lanes[$l].owner // ""' "$CFG")"
+  gh issue create --title "[$to] $title" --label "lane:$to" --label request \
+    --body "**From lane \`${lane:-?}\`** → **lane \`$to\`**${owner:+ (@$owner)}
+
+$details
+
+_Reply on this issue. The requester is stubbing against your CONTRACT meanwhile, so answer with the real shape when you can._"
+}
+
+# The one pinned issue every direction change is posted on (label: direction + broadcast). Prints its number.
+direction_issue() { # [create]
+  local n; n="$(cat "$STATE/direction_issue" 2>/dev/null || true)"
+  if [ -z "$n" ]; then
+    n="$(gh issue list --label direction --state open --limit 1 --json number -q '.[0].number' 2>/dev/null || true)"
+    if [ -z "$n" ] && [ "${1:-}" = "create" ]; then
+      gh label create direction --color 0052cc --description "Direction changes: every agent reads these" --force >/dev/null 2>&1 || true
+      gh label create broadcast --color d93f0b --description "Everyone's agent reads this" --force >/dev/null 2>&1 || true
+      n="$(gh issue create --title "Direction: every change of plan is posted here" --label direction --label broadcast \
+        --body "Each comment is one decision that changes what we are building. Newest wins. Post with \`scripts/hack decide\`, never by hand. The same text is kept in \`docs/decisions/\`." 2>/dev/null | grep -Eo '[0-9]+$' || true)"
+      [ -n "$n" ] && gh issue pin "$n" >/dev/null 2>&1 || true
+    fi
+    [ -n "$n" ] && { mkdir -p "$STATE"; echo "$n" > "$STATE/direction_issue"; }
+  fi
+  [ -n "$n" ] && echo "$n"
+}
+
+# decide "title" "Before/Now/Why…" [--affects lane,lane]: record a direction change and push it to every agent.
+cmd_decide() {
+  local title="" details="" affects="all lanes"
+  while [ $# -gt 0 ]; do
+    case "$1" in --affects) affects="${2:-}"; shift ;; *) if [ -z "$title" ]; then title="$1"; elif [ -z "$details" ]; then details="$1"; fi ;; esac; shift
+  done
+  [ -n "$title" ] && [ -n "$details" ] || die 'usage: scripts/hack decide "what changed, in one line" "Before: … / Now: … / Why: … / Judge: …" [--affects lane,lane]'
+  local lane me slug f body n
+  lane="$(my_lane)"; me="$(my_login)"
+  slug="$(printf '%s' "$title" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' | cut -c1-48)"
+  f="docs/decisions/$(date '+%Y%m%d-%H%M%S')-$slug.md"
+  body="## DIRECTION CHANGE: $title
+
+**By** lane \`${lane:-?}\`${me:+ (@$me)} · $(date '+%Y-%m-%d %H:%M') · **Affects:** $affects
+
+$details"
+  mkdir -p docs/decisions; printf '%s\n' "$body" > "$f"
+  if ! in_git_op; then git add "$f" && git commit -q -m "Direction: $title" -- "$f" || warn "could not commit $f — it will go with your next ship"; fi
+  echo "✓ Recorded in $f (it reaches dev with your next scripts/hack ship)."
+  if command -v gh >/dev/null 2>&1 && has_remote && n="$(direction_issue create)" && [ -n "$n" ]; then
+    if gh issue comment "$n" --body "$body" >/dev/null 2>&1; then
+      echo "✓ Broadcast on #$n: every teammate's agent gets it on their next prompt."
+    else warn "could not post on #$n — teammates will only see it once the file ships"; fi
+  else
+    warn "no GitHub remote — teammates will only see it once the file ships"
+  fi
+  echo "Now check your own lane: open tickets and running workers that this makes stale."
+}
+
+# direction [n]: the latest n decisions (default 3), newest first. From the issue when reachable, else from docs/decisions/.
+cmd_direction() {
+  local k="${1:-3}" n out=""
+  if command -v gh >/dev/null 2>&1 && has_remote && n="$(direction_issue)" && [ -n "$n" ]; then
+    out="$(gh issue view "$n" --json comments 2>/dev/null | jq -r --argjson k "$k" '
+      [.comments[] | select(.body | startswith("## DIRECTION CHANGE:"))] | reverse | .[0:$k][] | (.body | .[0:600]) + "\n"' 2>/dev/null)" || out=""
+  fi
+  if [ -z "$out" ] && [ -d docs/decisions ]; then
+    local f; for f in $(ls -1 docs/decisions/*.md 2>/dev/null | sort -r | head -n "$k"); do out="$out$(head -c 600 "$f")"$'\n\n'; done
+  fi
+  [ -n "$out" ] || return 0
+  echo "DIRECTION — latest decisions, newest first. They override older tickets, CONTRACTs and docs:"
+  echo "$out"
+}
+
+# feedback "title" ["details"]: log a problem with the KIT itself (not the app) on the kit repo, for after the hackathon.
+cmd_feedback() {
+  local title="${1:-}" details="${2:-}"
+  [ -n "$title" ] || die 'usage: scripts/hack feedback "what went wrong or could be better" ["details: what you ran, what happened, what you expected"]'
+  local kit lane src notes body n
+  kit="$(cfg '.kit // empty')"; lane="$(my_lane)"; src="$(repo_slug 2>/dev/null)"
+  body="**From** \`${src:-local repo}\` · lane \`${lane:-?}\` · $(date '+%Y-%m-%d %H:%M')
+
+${details:-_(no details)_}"
+  if [ -n "$kit" ] && command -v gh >/dev/null 2>&1; then
+    # Match by title across all open issues: people without write access can't apply the label, so theirs carry a title prefix.
+    n="$(gh issue list -R "$kit" --state open --limit 300 --json number,title 2>/dev/null \
+        | jq -r --arg t "$title" '[.[] | select((.title | ascii_downcase | ltrimstr("[kit-feedback] ")) == ($t | ascii_downcase))] | sort_by(.number)[0].number // empty')"
+    if [ -n "$n" ]; then
+      gh issue comment "$n" -R "$kit" --body "Hit again. $body" >/dev/null 2>&1 && { echo "✓ Already logged as $kit#$n — added this occurrence. Carry on."; return 0; }
+    else
+      gh label create kit-feedback -R "$kit" --color 5319e7 --description "Kit problem or improvement, logged during a hackathon" --force >/dev/null 2>&1 || true
+      if gh issue create -R "$kit" --title "$title" --label kit-feedback --body "$body" >/dev/null 2>&1 \
+         || gh issue create -R "$kit" --title "[kit-feedback] $title" --body "$body" >/dev/null 2>&1; then
+        echo "✓ Logged on $kit. Don't fix the kit now — work around it and carry on."; return 0
+      fi
+    fi
+  fi
+  # No kit repo configured, or no access to it: keep the note in the lane so /hack-retro can file it later.
+  notes="docs/lanes/${lane:-unknown}/KIT-NOTES.md"; mkdir -p "$(dirname "$notes")"
+  printf -- '- **%s** (%s) %s\n' "$title" "$(date '+%m-%d %H:%M')" "$(printf '%s' "$details" | tr '\n' ' ')" >> "$notes"
+  echo "✓ Noted in $notes (couldn't reach the kit repo${kit:+ $kit}). /hack-retro files these later."
+}
+
+cmd_labels() {
+  command -v gh >/dev/null 2>&1 || die "gh missing"
+  local l
+  for l in $(jq -r '.lanes | keys[]' "$CFG"); do gh label create "lane:$l" --color 1d76db --description "Ticket owned by lane $l" --force >/dev/null && echo "  label lane:$l"; done
+  gh label create broadcast --color d93f0b --description "Everyone's agent reads this" --force >/dev/null
+  gh label create request   --color fbca04 --description "Cross-lane request" --force >/dev/null
+  gh label create ready-for-agent --color 0e8a16 --description "Fully specified: a background worker can build it unattended" --force >/dev/null
+  gh label create needs-human --color d93f0b --description "Needs a person: a decision, an account, a device, taste" --force >/dev/null
+  gh label create direction --color 0052cc --description "Direction changes: every agent reads these" --force >/dev/null
+  gh label create hack:map  --color 5319e7 --description "The wayfinder map" --force >/dev/null
+  gh label create P0-golden-path --color b60205 --description "On the demo's golden path" --force >/dev/null
+  gh label create P1-real   --color e99695 --description "Replace a fake with the real thing" --force >/dev/null
+  gh label create P2-polish --color c5def5 --description "Polish a judge will notice" --force >/dev/null
+  echo "  labels: ready-for-agent, needs-human, broadcast, request, hack:map, P0-golden-path, P1-real, P2-polish"
+}
+
+# init <org/repo> [--public]  — lead, once.
+cmd_init() {
+  local slug="${1:-}" vis="--private"
+  [ "${2:-}" = "--public" ] && vis="--public"
+  [ -n "$slug" ] || die "usage: scripts/hack init <org/repo> [--public]"
+  gh auth status >/dev/null 2>&1 || die "run: gh auth login"
+  git rev-parse --git-dir >/dev/null 2>&1 || git init -q -b "$INTEG"
+  git config core.hooksPath .githooks
+  chmod +x scripts/hack .githooks/* 2>/dev/null || true
+  [ "$(current_branch)" = "$INTEG" ] || git checkout -q -B "$INTEG"
+  git add -A
+  git diff --cached --quiet || HACK_LANE="" git commit -q -m "Hackathon kit" || die "commit failed"
+  if ! has_remote; then
+    gh repo create "$slug" $vis --source . --remote origin --push || die "repo create failed"
+  else
+    git push -q -u origin "$INTEG" || die "push failed"
+  fi
+  HACK_PROMOTE=1 git push -q origin "$INTEG:$DEMO" 2>/dev/null || warn "could not create the $DEMO branch"
+  gh repo edit "$slug" --default-branch "$INTEG" --enable-auto-merge --enable-merge-commit --delete-branch-on-merge=false >/dev/null 2>&1 \
+    || warn "could not set repo options (default branch / auto-merge) — set them in Settings"
+  rm -f "$STATE/repo"
+  cmd_labels
+  # Branch protection: needs a public repo or a paid org plan. Without it, ship merges PRs directly (still works).
+  if gh api -X PUT "repos/$slug/branches/$INTEG/protection" --input - >/dev/null 2>&1 <<JSON
+{"required_status_checks":{"strict":false,"contexts":["lane-check"]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null}
+JSON
+  then echo "  ✓ $INTEG protected: PRs need the lane-check to pass (auto-merge on)"
+  else echo "  – $INTEG not protected (plan doesn't allow it). PRs merge immediately; lane-check still runs and reports."; fi
+  gh api -X PUT "repos/$slug/branches/$DEMO/protection" --input - >/dev/null 2>&1 <<JSON || true
+{"required_status_checks":null,"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}
+JSON
+  echo
+  echo "✓ Repo ready: https://github.com/$slug   (default branch $INTEG, demo branch $DEMO)"
+  echo "Next: invite teammates (gh api -X PUT repos/$slug/collaborators/<login>), then run /hack-wayfinder."
+}
+
+# promote [--yes]: fast-forward prod to dev and tag it. Humans decide; the git-guard hook makes agents ask.
+cmd_promote() {
+  has_remote || die "no origin remote"
+  git fetch -q origin "$INTEG" "$DEMO" || die "fetch failed"
+  local n; n="$(git rev-list --count "origin/$DEMO..origin/$INTEG")"
+  [ "$n" -gt 0 ] || { echo "$DEMO is already at $INTEG."; return 0; }
+  echo "Promoting $n commit(s) $INTEG → $DEMO:"; git log --format='  %h %s (%an)' "origin/$DEMO..origin/$INTEG" | head -30
+  if [ "${1:-}" != "--yes" ]; then
+    printf 'Did someone just run the golden path end-to-end on %s? Type "demo" to promote: ' "$INTEG"
+    read -r ans; [ "$ans" = "demo" ] || die "not promoted."
+  fi
+  local tag; tag="demo-$(date +%m%d-%H%M)"
+  HACK_PROMOTE=1 git push -q origin "origin/$INTEG:refs/heads/$DEMO" || die "push to $DEMO failed (not a fast-forward?)"
+  git tag "$tag" "origin/$INTEG" && HACK_PROMOTE=1 git push -q origin "$tag"
+  echo "✓ $DEMO updated. Tagged $tag — last known-good demo. To roll back the demo machine: git checkout <older demo-* tag>"
+}
+
+# ───────────────────────────── run ─────────────────────────────
+
+# Pick (and boot) the simulator: configured name → a booted standard iPhone → first available iPhone. Prints its UDID.
+ios_pick_sim() {
+  local want udid; want="$(cfg '.run.simulator // empty')"
+  udid="$(xcrun simctl list devices available -j | jq -r --arg w "$want" '
+    [.devices | to_entries[] | select(.key | test("iOS")) | .value[]] as $all
+    | (if $w != "" then ($all | map(select(.name == $w)) | sort_by(.state != "Booted") | .[0].udid) else null end)
+      // ($all | map(select(.state == "Booted" and (.name | test("^iPhone [0-9]")))) | .[0].udid)
+      // ($all | map(select(.name | test("^iPhone [0-9]"))) | .[0].udid)
+      // ($all | map(select(.name | startswith("iPhone"))) | .[0].udid)
+      // empty')"
+  [ -n "$udid" ] || die "no iPhone simulator available — install one in Xcode > Settings > Components"
+  xcrun simctl boot "$udid" 2>/dev/null || true
+  echo "$udid"
+}
+
+# sim: boot the simulator `run` will use and print its UDID (so a live panel can attach before the build).
+cmd_sim() {
+  [ "$(uname)" = "Darwin" ] && command -v xcrun >/dev/null 2>&1 || die "No Mac/Xcode here — no simulator."
+  ios_pick_sim
+}
+
+ios_run() {
+  local panel=0; [ "${1:-}" = "--panel" ] && panel=1
+  [ "$(uname)" = "Darwin" ] && command -v xcodebuild >/dev/null 2>&1 || {
+    echo "No Mac/Xcode here — can't run the iOS app locally. Ship it and ask a Mac teammate: scripts/hack request <lane> \"please run + screenshot <what>\""; return 0; }
+  if [ -f project.yml ] && command -v xcodegen >/dev/null 2>&1; then xcodegen generate -q || die "xcodegen failed"; fi
+  local ws proj target scheme udid dd app bid
+  ws="$(find . -maxdepth 2 -name '*.xcworkspace' -not -path '*/.build/*' -not -path '*.xcodeproj/*' | head -1)"
+  proj="$(find . -maxdepth 2 -name '*.xcodeproj' -not -path '*/.build/*' | head -1)"
+  if [ -n "$ws" ]; then target=(-workspace "$ws"); elif [ -n "$proj" ]; then target=(-project "$proj"); else die "no Xcode project found"; fi
+  scheme="$(cfg '.run.scheme // empty')"
+  [ -n "$scheme" ] || scheme="$(xcodebuild "${target[@]}" -list -json 2>/dev/null | jq -r '(.workspace // .project).schemes[0] // empty')"
+  [ -n "$scheme" ] || die "no scheme found — set .run.scheme in .hack/lanes.json"
+  udid="$(ios_pick_sim)" || exit 1
+  # --panel: the app is shown in Claude's built-in simulator panel, so don't also open a Simulator window.
+  [ "$panel" = 1 ] || open -a Simulator 2>/dev/null || true
+  # Build OUTSIDE the repo: in an iCloud-synced folder (Desktop, Documents) the built .app picks up
+  # extended attributes and code signing fails with "resource fork, Finder information, or similar detritus".
+  dd="${HACK_BUILD_DIR:-$HOME/Library/Caches/hack-kit}/$(basename "$ROOT")-$(printf '%s' "$ROOT" | cksum | cut -d' ' -f1)/dd"
+  mkdir -p "$dd"
+  echo "Building scheme '$scheme'…"
+  if ! xcodebuild "${target[@]}" -scheme "$scheme" -configuration Debug -destination "id=$udid" -derivedDataPath "$dd" -quiet build > "$STATE/build.log" 2>&1; then
+    grep -E "error:|not allowed|failed with|BUILD FAILED" "$STATE/build.log" | sort -u | head -30
+    die "BUILD FAILED — full log: .hack/state/build.log"
+  fi
+  app="$(find "$dd/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name '*.app' | head -1)"
+  [ -n "$app" ] || die "built, but no .app found"
+  bid="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")"
+  xcrun simctl terminate "$udid" "$bid" >/dev/null 2>&1 || true
+  xcrun simctl install "$udid" "$app" && xcrun simctl launch "$udid" "$bid" >/dev/null || die "install/launch failed"
+  sleep 3
+  xcrun simctl io "$udid" screenshot "$STATE/last-run.png" >/dev/null 2>&1 || true
+  echo "✓ Running $bid on simulator $udid"
+  echo "  app: $app"
+  echo "  screenshot: .hack/state/last-run.png   (re-take: xcrun simctl io $udid screenshot <file>)"
+}
+
+# scaffold-ios <AppName>: a minimal SwiftUI app whose project file never changes when files are added.
+cmd_scaffold_ios() {
+  local name="${1:-}"
+  echo "$name" | grep -Eq '^[A-Za-z][A-Za-z0-9]*$' || die "usage: scripts/hack scaffold-ios <AppName>   (letters/digits only)"
+  [ -e "$name.xcodeproj" ] && die "$name.xcodeproj already exists"
+  mkdir -p "$name.xcodeproj" "$name/App" "$name/Shared"
+  sed "s/__APP__/$name/g; s/__BUNDLE__/$(echo "$name" | tr 'A-Z' 'a-z')/g" "$ROOT/scripts/templates/ios.pbxproj" > "$name.xcodeproj/project.pbxproj"
+  cat > "$name/App/${name}App.swift" <<SWIFT
+import SwiftUI
+
+// Lead lane owns this file: the only place that references every lane's entry view.
+@main
+struct ${name}App: App {
+    var body: some Scene {
+        WindowGroup {
+            Text("$name")
+                .font(.largeTitle.bold())
+        }
+    }
+}
+SWIFT
+  echo "// Types every lane uses. Lead lane owns this folder; others request changes." > "$name/Shared/Shared.swift"
+  echo "✓ Created $name.xcodeproj + $name/ (App/, Shared/). Add one folder per lane under $name/ and list them in .hack/lanes.json."
+  echo "  Try it: scripts/hack run"
+}
+
+cmd_run() {
+  mkdir -p "$STATE"
+  local c; c="$(cfg '.run.command // empty')"
+  if [ -n "$c" ]; then echo "run: $c"; eval "$c"; return $?; fi
+  if [ -f project.yml ] || [ -n "$(find . -maxdepth 2 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) -not -path '*/.build/*' | head -1)" ]; then ios_run "$@"; return $?; fi
+  if [ -f package.json ] && jq -e '.scripts.dev' package.json >/dev/null 2>&1; then
+    [ -d node_modules ] || npm install
+    echo "run: npm run dev   (agents: start this in the background)"; npm run dev; return $?
+  fi
+  die "no app found yet. Set .run.command in .hack/lanes.json, or add an Xcode project / a package.json with a dev script."
+}
+
+# ───────────────────────────── dispatch ─────────────────────────────
+
+usage() {
+  cat <<EOF
+hack — hackathon kit
+  setup [lane]            set up YOUR workspace after cloning (branch, hooks, identity)
+  run [--panel]           build + launch the app (one command; --panel = shown in Claude's simulator panel)
+  sim                     boot the simulator `run` uses and print its id
+  decide "title" "Before/Now/Why" [--affects a,b]   record a direction change + push it to every agent
+  direction [n]           the latest decisions
+  feedback "title" ["details"]   log a problem/improvement for the KIT itself (filed on the kit repo)
+  ship "msg" [--closes N] commit → sync → PR into $INTEG → auto-merge
+  sync                    pull teammates' merged work into your lane branch
+  inbox [--all]           new issue activity for your lane
+  request <lane> "title" ["details"]   ask another lane for something (GitHub issue)
+  queue                   your lane's tickets: ready for a worker / in progress / needs you
+  collect <worker-branch> merge a finished background worker's branch into your lane branch
+  orchestrate on|off      keep this chat dispatching workers while ready tickets remain
+  status                  who owns what, how far ahead/behind you are
+  promote                 $INTEG → $DEMO (demo-ready) + tag
+  lane-check --staged | --range A...B | <files>   verify changes stay in lane
+  init <org/repo>         LEAD, once: create the repo, branches, labels
+  labels                  LEAD: (re)create lane labels after lanes are named
+  scaffold-ios <AppName>  LEAD: minimal SwiftUI app with a conflict-proof Xcode project
+EOF
+}
+
+sub="${1:-}"; [ $# -gt 0 ] && shift
+case "$sub" in
+  setup) cmd_setup "$@" ;;
+  run) cmd_run "$@" ;;
+  sim) cmd_sim ;;
+  feedback) cmd_feedback "$@" ;;
+  decide) cmd_decide "$@" ;;
+  direction) cmd_direction "$@" ;;
+  ship) cmd_ship "$@" ;;
+  sync) rm -f "$STATE/sync.ts"; cmd_sync && echo "(up to date with $INTEG)" ;;
+  inbox) cmd_inbox "$@" ;;
+  request) cmd_request "$@" ;;
+  status) cmd_status ;;
+  promote) cmd_promote "$@" ;;
+  lane-check) cmd_lane_check "$@" ;;
+  init) cmd_init "$@" ;;
+  labels) cmd_labels ;;
+  scaffold-ios) cmd_scaffold_ios "$@" ;;
+  queue) cmd_queue ;;
+  orchestrate) cmd_orchestrate "$@" ;;
+  collect) cmd_collect "$@" ;;
+  hook) cmd_hook "$@" ;;
+  whoami) echo "lane=$(my_lane) login=$(my_login) branch=$(current_branch)" ;;
+  ""|help|-h|--help) usage ;;
+  *) usage; exit 1 ;;
+esac

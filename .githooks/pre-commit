@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Lane check for human commits too (Xcode, editors) — not just the agent.
+root="$(git rev-parse --show-toplevel)"
+[ -e "$(git rev-parse --git-dir)/MERGE_HEAD" ] && exit 0   # merge commits carry teammates' files
+exec "$root/scripts/hack" lane-check --staged

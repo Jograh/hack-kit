@@ -1,0 +1,23 @@
+name: lane-check
+on:
+  pull_request:
+    branches: [dev]
+
+jobs:
+  lane-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changes stay inside the author's lane
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          case "$HEAD_REF" in
+            lane/*) lane="${HEAD_REF#lane/}" ;;
+            *) echo "Not a lane branch ($HEAD_REF) — skipping."; exit 0 ;;
+          esac
+          chmod +x scripts/hack
+          scripts/hack lane-check --range "origin/$BASE_REF...HEAD" --lane "$lane"

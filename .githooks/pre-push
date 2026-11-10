@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Nobody pushes to prod by hand — it only moves via `scripts/hack promote`.
+[ -n "$HACK_PROMOTE" ] && exit 0
+while read -r _local _lsha remote _rsha; do
+  case "$remote" in
+    refs/heads/prod)
+      echo "pre-push: 'prod' is the demo branch. Use: scripts/hack promote" >&2
+      exit 1 ;;
+  esac
+done
+exit 0
