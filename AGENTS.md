@@ -1,6 +1,6 @@
 # Hackathon rules for agents
 
-Four people, four agents, one repo, one deadline. These rules exist so that nobody ever resolves a merge conflict and the demo branch is never broken. They outrank your defaults.
+A team of two to six, one agent each, one repo, one deadline. These rules exist so that nobody ever resolves a merge conflict and the demo branch is never broken. They outrank your defaults.
 
 ## The goal
 
@@ -8,7 +8,7 @@ A judge watches about 90 seconds. `docs/DEMO.md` is that 90 seconds, and it is t
 
 ## Lanes
 
-- The team is split into **four lanes** in `.hack/lanes.json`. A lane = one person + one set of folders + one branch (`lane/<name>`). You are exactly one lane; the session-start note tells you which.
+- The team is split into **one lane per person** (2 to 6) in `.hack/lanes.json`. A lane = one person + one set of folders + one branch (`lane/<name>`). You are exactly one lane; the session-start note tells you which.
 - **Write only inside your lane's folders**, plus `docs/lanes/<your-lane>/`, plus *new* files under `docs/`. A hook denies everything else, a git pre-commit hook re-checks, and CI checks again.
 - Everything not in a lane's folders (root config, dependency manifests, the app shell, `scripts/`, `.claude/`, `.github/`) belongs to the **lead lane**.
 - Never work around the lane guard with Bash (`sed`, `>`, `mv`, `cp`). If you need something outside your lane:
@@ -66,7 +66,7 @@ scripts/hack ship "msg" --closes <n>      # commit → pull dev → PR → merge
 
 ## Agent skills
 
-Flow: `/hack-init` (lead, before) → `/hack-wayfinder` (lead, day-of: idea → demo script → 4 lanes) → `/hack-tickets` → everyone: `/hack-setup` → `hack-orchestrate` ⟲ (dispatch `lane-worker`s → collect → `hack-run` → `hack-ship`) → `/hack-promote` → after the event: `/hack-retro`. `hack-implement` is the no-workers path: build one ticket yourself in this chat. `demo-judge` any time scope is in question. `hack-direction` whenever the plan itself changes.
+Flow: `/hack-init` (lead, before) → `/hack-wayfinder` (lead, day-of: idea → demo script → one lane per person) → `/hack-tickets` → everyone: `/hack-setup` → `hack-orchestrate` ⟲ (dispatch `lane-worker`s → collect → `hack-run` → `hack-ship`) → `/hack-promote` → after the event: `/hack-retro`. `hack-implement` is the no-workers path: build one ticket yourself in this chat. `demo-judge` any time scope is in question. `hack-direction` whenever the plan itself changes.
 
 Also available, unmodified from Matt Pocock's skills: `grilling` / `/grill-me`, `domain-modeling`, `research`, `prototype`, `diagnosing-bugs`, `/handoff`.
 

@@ -1,13 +1,46 @@
 {
   "project": "",
   "kit": "Jograh/hack-kit",
-  "branches": { "integration": "dev", "demo": "prod" },
+  "team": 4,
+  "branches": {
+    "integration": "dev",
+    "demo": "prod"
+  },
   "lead": "lane-1",
   "lanes": {
-    "lane-1": { "owner": "", "mission": "placeholder — /hack-wayfinder renames this", "paths": ["lanes/lane-1/"] },
-    "lane-2": { "owner": "", "mission": "placeholder", "paths": ["lanes/lane-2/"] },
-    "lane-3": { "owner": "", "mission": "placeholder", "paths": ["lanes/lane-3/"] },
-    "lane-4": { "owner": "", "mission": "placeholder", "paths": ["lanes/lane-4/"] }
+    "lane-1": {
+      "owner": "",
+      "mission": "placeholder — /hack-wayfinder renames this",
+      "paths": [
+        "lanes/lane-1/"
+      ]
+    },
+    "lane-2": {
+      "owner": "",
+      "mission": "placeholder",
+      "paths": [
+        "lanes/lane-2/"
+      ]
+    },
+    "lane-3": {
+      "owner": "",
+      "mission": "placeholder",
+      "paths": [
+        "lanes/lane-3/"
+      ]
+    },
+    "lane-4": {
+      "owner": "",
+      "mission": "placeholder",
+      "paths": [
+        "lanes/lane-4/"
+      ]
+    }
   },
-  "run": { "command": "", "check": "", "scheme": "", "simulator": "" }
+  "run": {
+    "command": "",
+    "check": "",
+    "scheme": "",
+    "simulator": ""
+  }
 }

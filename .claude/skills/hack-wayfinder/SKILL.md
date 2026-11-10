@@ -1,13 +1,13 @@
 ---
 name: hack-wayfinder
-description: "LEAD, once, with the whole team in the room: turn the hackathon brief into one chosen idea, a 90-second demo script, and exactly four lanes (one folder + one person each) published as a map issue."
+description: "LEAD, once, with the whole team in the room: turn the hackathon brief into one chosen idea, a 90-second demo script, and one lane per person (one folder + one owner each, 2 to 6 lanes) published as a map issue."
 disable-model-invocation: true
 ---
 
 Adapted from Matt Pocock's `wayfinder`. Same core idea (name the destination, chart a shared map on the issue tracker, leave the fog as fog) with three hackathon changes:
 
 - **The destination is always a demo**, never a spec: the 90 seconds a judge watches. Everything is planned backwards from it.
-- **The map is cut into exactly four lanes.** Not three, not five. A lane is one person + one set of folders + one branch. Lanes are how four agents work at once without a single merge conflict.
+- **The map is cut into exactly one lane per person.** The team size (2 to 6) is `team` in `.hack/lanes.json`; check it with `scripts/hack team` and, if the room disagrees, fix it with `scripts/hack team <n>` before going further. Not one lane more or fewer than there are people. A lane is one person + one set of folders + one branch. Lanes are how everyone's agents work at once without a single merge conflict.
 - **It is one sitting, not many sessions.** The clock is the scarcest thing. Budget ~10% of the total hackathon time for this skill, and say the budget out loud at the start.
 
 ## 1. The brief (5 min)
@@ -49,11 +49,13 @@ Call the Skill tool with "grilling" on the winner: **two rounds maximum**, bread
 
 5–8 beats. Every beat is something visible. A beat that needs explaining is two beats or a cut.
 
-## 4. Cut the four lanes (10 min)
+## 4. Cut the lanes (10 min)
 
 Rules, in priority order:
 
-1. **Exactly four lanes, one owner each, disjoint folders.** Every path in the repo has exactly one owning lane. Anything not listed belongs to the lead lane.
+1. **One lane per person, one owner each, disjoint folders.** Every path in the repo has exactly one owning lane. Anything not listed belongs to the lead lane.
+   - **2 or 3 people:** the lead lane carries the shell *and* a feature area. Cut the demo script harder; fewer hands means fewer beats, not thinner ones.
+   - **5 or 6 people:** every lane must still own something a judge sees or the demo depends on. If the beats don't split that many ways, make the extra lanes about the demo itself rather than slicing a feature in two: a **stage** lane (seed data, replays, the fallback recording, the demo device) or a **pitch** lane (landing page, slides, the script and the Q&A answers). Two people in one feature folder is a merge conflict waiting to happen.
 2. **Cut by folder, along the demo.** Prefer lanes that each own whole beats (a screen, a service, the data/AI behind a beat) over layers ("frontend"/"backend") that force every beat through two people.
 3. **One lane is the lead lane**: it owns the app shell / composition root, root config, dependency manifests, `docs/DEMO.md`, and integration. Give it the lightest feature load.
 4. **Each lane publishes a contract and a stub.** `docs/lanes/<lane>/CONTRACT.md` says what the lane exposes (function/endpoint/view names, data shapes, example values) and what it consumes. Each lane's *first* ticket is a hardcoded stub of that contract, shipped within 30 minutes, so nobody ever waits on anybody.

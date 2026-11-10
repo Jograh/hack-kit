@@ -656,6 +656,23 @@ cmd_labels() {
   echo "  labels: ready-for-agent, needs-human, broadcast, request, hack:map, P0-golden-path, P1-real, P2-polish"
 }
 
+# team [n]: how many people (2–6) = how many lanes. Rebuilds the placeholder lanes; refuses once lanes are named.
+cmd_team() {
+  local n="${1:-}"
+  if [ -z "$n" ]; then
+    echo "Team size: $(cfg '.team // (.lanes | length)') · lanes: $(jq -r '.lanes | keys | join(", ")' "$CFG")"; return 0
+  fi
+  case "$n" in 2|3|4|5|6) ;; *) die "team size must be between 2 and 6" ;; esac
+  if [ "$(jq -r '[.lanes | to_entries[] | select((.key | test("^lane-[0-9]+$") | not) or ((.value.owner // "") != ""))] | length' "$CFG")" != "0" ]; then
+    die "lanes are already named or owned. Changing the team size now means re-cutting the lanes: use /hack-wayfinder (Re-charting), then set \"team\" in .hack/lanes.json by hand."
+  fi
+  local tmp; tmp="$(mktemp)"
+  jq --argjson n "$n" '.team = $n | .lead = "lane-1"
+    | .lanes = ([range(1; $n + 1) | {key: "lane-\(.)", value: {owner: "", mission: (if . == 1 then "placeholder — /hack-wayfinder renames this" else "placeholder" end), paths: ["lanes/lane-\(.)/"]}}] | from_entries)' \
+    "$CFG" > "$tmp" && mv "$tmp" "$CFG" || die "could not rewrite $CFG"
+  echo "✓ Team of $n: $(jq -r '.lanes | keys | join(", ")' "$CFG"). /hack-wayfinder turns these into $n real lanes."
+}
+
 # init <org/repo> [--public]  — lead, once.
 cmd_init() {
   local slug="${1:-}" vis="--private"
@@ -827,6 +844,7 @@ hack — hackathon kit
   status                  who owns what, how far ahead/behind you are
   promote                 $INTEG → $DEMO (demo-ready) + tag
   lane-check --staged | --range A...B | <files>   verify changes stay in lane
+  team [n]                LEAD, before lanes are named: set the team size (2–6 people = 2–6 lanes)
   init <org/repo>         LEAD, once: create the repo, branches, labels
   labels                  LEAD: (re)create lane labels after lanes are named
   scaffold-ios <AppName>  LEAD: minimal SwiftUI app with a conflict-proof Xcode project
@@ -849,6 +867,7 @@ case "$sub" in
   promote) cmd_promote "$@" ;;
   lane-check) cmd_lane_check "$@" ;;
   init) cmd_init "$@" ;;
+  team) cmd_team "$@" ;;
   labels) cmd_labels ;;
   scaffold-ios) cmd_scaffold_ios "$@" ;;
   queue) cmd_queue ;;

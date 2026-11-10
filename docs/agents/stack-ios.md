@@ -22,7 +22,7 @@ Every "add file" used to rewrite this file, so two people adding files always co
   Shared/         ← lead lane: types every lane uses (the code form of the contracts)
 ```
 
-Each lane exposes **one entry point** (a root `View`, or a service behind a protocol) named in its `CONTRACT.md`. The lead lane's shell is the only place that references all four. Lanes never import each other's internals; if two lanes need the same type, it moves to `Shared/` by request to the lead.
+Each lane exposes **one entry point** (a root `View`, or a service behind a protocol) named in its `CONTRACT.md`. The lead lane's shell is the only place that references all of them. Lanes never import each other's internals; if two lanes need the same type, it moves to `Shared/` by request to the lead.
 
 Put these folder prefixes in `.hack/lanes.json` → `lanes.<name>.paths` (e.g. `"MyApp/Capture/"`).
 
