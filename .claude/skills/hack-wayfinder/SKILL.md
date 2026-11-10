@@ -66,7 +66,7 @@ Present the cut as a table (lane · owner · folders · beats carried · exposes
 
 ## 5. Write it down and publish
 
-1. Rewrite `.hack/lanes.json`: real lane names (short, lowercase, one word), `owner` = GitHub login, `mission`, `paths` (folder prefixes ending in `/`), `lead`, and `run` if the stack is known.
+1. Rewrite `.hack/lanes.json`: real lane names (short, lowercase, one word), `owner` = GitHub username, `mission`, `paths` (folder prefixes ending in `/`), `lead`, and `run` if the stack is known.
 2. Create each lane's folder(s) with a one-line `README.md`, and `docs/lanes/<lane>/CONTRACT.md`.
 3. Run `scripts/hack labels`.
 4. Publish **the map**: one issue labelled `hack:map` and `broadcast`, titled `MAP: <project>`, whose body is: the destination (link `docs/DEMO.md`, quote *the moment*), the lane table, **Decisions so far** (one line each), **Not yet specified**, **Cut list**. It is an index: it links, it does not restate.
