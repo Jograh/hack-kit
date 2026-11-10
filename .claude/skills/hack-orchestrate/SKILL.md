@@ -49,11 +49,23 @@ What goes in **Needs you**:
 
 Never answer a human question on the user's behalf, and never let a worker do so.
 
-## Planning and specs, from this chat
+## Designing the lane, from this chat
 
-- **Brainstorming** with the user happens here. When an idea firms up, call the Skill tool with "demo-judge" (Mode 2) for a REAL / STAGE / CUT verdict before it becomes work.
-- **One-off ticket**: write it yourself with the template in the `hack-tickets` skill, label it `lane:<lane>` plus `ready-for-agent` or `needs-human`, then dispatch it. A ticket is `ready-for-agent` only if a worker could finish it without asking anyone anything.
-- **A bigger plan or spec**: grill the user here first (Skill tool, "grilling", two rounds at most), then split it into tickets. Research can go to a background subagent with the "research" skill while you keep talking.
+`/hack-wayfinder` only decided which lanes exist, which beats each carries and what each exposes. **How** this lane delivers its beats is designed here, by the user, with you. The stub ticket is the only one that exists at the start; build it while the design happens.
+
+The path, each step a command the user can type:
+
+1. `/grill-me`: talk the design through. Keep it to what a judge sees and what the contract needs; two rounds at most. When an idea firms up, call the Skill tool with "demo-judge" (Mode 2) for a REAL / STAGE / CUT verdict.
+2. `/hack-spec`: write the result down as one spec issue for the lane.
+3. `/hack-tickets`: split the spec into tickets for this lane.
+4. Back to the loop above: dispatch them.
+
+When the queue is empty and the lane's beats aren't done, don't invent tickets: tell the user the next step is `/grill-me`. The same path repeats for every new chunk of work.
+
+Shortcuts:
+
+- **One small thing** ("make the button pulse"): skip the spec. Write one ticket yourself with the template in the `hack-tickets` skill, label it `lane:<lane>` plus `ready-for-agent` or `needs-human`, and dispatch it. A ticket is `ready-for-agent` only if a worker could finish it without asking anyone anything.
+- **A design question you can't answer by talking** → Skill tool, "prototype". **A fact you need** (an API, what a device can do) → a background subagent with the "research" skill while you keep talking.
 - Work that belongs to another lane is a `scripts/hack request`, never a ticket you dispatch.
 
 ## Changes of direction

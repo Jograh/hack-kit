@@ -66,7 +66,18 @@ scripts/hack ship "msg" --closes <n>      # commit → pull dev → PR → merge
 
 ## Agent skills
 
-Flow: `/hack-init` (lead, before) → `/hack-wayfinder` (lead, day-of: idea → demo script → one lane per person) → `/hack-tickets` → everyone: `/hack-setup` → `hack-orchestrate` ⟲ (dispatch `lane-worker`s → collect → `hack-run` → `hack-ship`) → `/hack-promote` → after the event: `/hack-retro`. `hack-implement` is the no-workers path: build one ticket yourself in this chat. `demo-judge` any time scope is in question. `hack-direction` whenever the plan itself changes.
+Flow, as commands:
+
+```
+Lead, before:      /hack-init
+Lead, kick-off:    /hack-wayfinder            brief → idea → demo script → one lane per person → one stub ticket each
+Everyone, once:    /hack-setup
+Everyone, repeat:  /grill-me → /hack-spec → /hack-tickets → /hack-orchestrate
+                   (the orchestrator dispatches lane-workers, then /hack-run and /hack-ship)
+Team:              /hack-promote              after the event: /hack-retro
+```
+
+Wayfinder picks the lanes; it does not design them. Each person designs their own lane with their orchestrator (`/grill-me` → `/hack-spec` → `/hack-tickets`) and has it built. `/hack-implement` is the no-workers path: build one ticket yourself in this chat. `/demo-judge` any time scope is in question. `/hack-direction` whenever the plan itself changes. `/hack-device` puts an iOS build on a real iPhone.
 
 Also available, unmodified from Matt Pocock's skills: `grilling` / `/grill-me`, `domain-modeling`, `research`, `prototype`, `diagnosing-bugs`, `/handoff`.
 

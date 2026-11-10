@@ -70,9 +70,9 @@ Present the cut as a table (lane · owner · folders · beats carried · exposes
 2. Create each lane's folder(s) with a one-line `README.md`, and `docs/lanes/<lane>/CONTRACT.md`.
 3. Run `scripts/hack labels`.
 4. Publish **the map**: one issue labelled `hack:map` and `broadcast`, titled `MAP: <project>`, whose body is: the destination (link `docs/DEMO.md`, quote *the moment*), the lane table, **Decisions so far** (one line each), **Not yet specified**, **Cut list**. It is an index: it links, it does not restate.
-5. Call the Skill tool with "hack-tickets" to publish each lane's first tickets under the map.
+5. Call the Skill tool with "hack-tickets" in **kick-off mode**: it publishes exactly one ticket per lane, the stub of that lane's contract. Nothing more. Wayfinder decides *which* lanes exist and what each must expose; **how** a lane delivers its beats is designed by its owner, in their own chat (`/grill-me` → `/hack-spec` → `/hack-tickets`).
 6. Ship it: `scripts/hack setup <lead lane>` (puts you on your lane branch, keeping these uncommitted files), then `scripts/hack ship "Chart the map"`. The lead lane is allowed to add new files in any lane's folder, which is what makes this scaffold legal; it still can't edit another lane's existing files.
-7. Tell the team, verbatim: **clone the repo, open it in Claude Code, run `/hack-setup`.**
+7. Tell the team, verbatim: **clone the repo, open it in Claude Code, run `/hack-setup`. Then design your lane with `/grill-me`.**
 
 ## Re-charting mid-hackathon
 
