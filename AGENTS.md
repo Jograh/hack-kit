@@ -77,7 +77,7 @@ Everyone, repeat:  /grill-me → /hack-spec → /hack-tickets → /hack-orchestr
 Team:              /hack-promote              after the event: /hack-retro
 ```
 
-Wayfinder picks the lanes; it does not design them. Each person designs their own lane with their orchestrator (`/grill-me` → `/hack-spec` → `/hack-tickets`) and has it built. `/hack-implement` is the no-workers path: build one ticket yourself in this chat. `/demo-judge` any time scope is in question. `/hack-direction` whenever the plan itself changes. `/hack-device` puts an iOS build on a real iPhone.
+Wayfinder picks the lanes; it does not design them. Each person designs their own lane with their orchestrator (`/grill-me` → `/hack-spec` → `/hack-tickets`) and has it built. `/hack-implement` is the no-workers path: build one ticket yourself in this chat. `/demo-judge` any time scope is in question. `/hack-direction` whenever the plan itself changes. `/hack-device` puts an iOS build on a real iPhone. `/loop 5m /hack-heartbeat` is an optional timer that keeps a lane checking for requests and merges while its person is away; recommended for the lead lane.
 
 Also available, unmodified from Matt Pocock's skills: `grilling` / `/grill-me`, `domain-modeling`, `research`, `prototype`, `diagnosing-bugs`, `/handoff`.
 

@@ -33,6 +33,7 @@ Lead, before         /hack-init
 Lead, at kick-off    /hack-wayfinder
 Everyone, once       /hack-setup
 Everyone, on repeat  /grill-me → /hack-spec → /hack-tickets → /hack-orchestrate
+Optional timer       /loop 5m /hack-heartbeat      (recommended for the lead)
 Team, at the end     /hack-promote
 Afterwards           /hack-retro
 ```
@@ -85,6 +86,25 @@ Two steps the orchestrator runs for you, which you can also type yourself:
 Your teammates' work doesn't wait for a ship. It is merged into your branch automatically every time you send a message, so you are always building on the latest `dev`.
 
 Prefer to build a ticket yourself in the chat, without workers? `/hack-implement`.
+
+### Optional: a heartbeat (recommended for the lead)
+
+Your chat only checks for teammates' requests and new work when something happens in it: you send a message, or a worker finishes. Step away for twenty minutes and requests wait until you're back.
+
+A heartbeat closes that gap by checking in on a timer:
+
+```
+/loop 5m /hack-heartbeat
+```
+
+| | |
+|---|---|
+| **Who should run it** | **The lead: recommended.** Every lane's requests for dependencies, config and wiring go to the lead, so an idle lead chat holds up the whole team. Everyone else: optional; `10m` or `15m` is plenty. |
+| **What each tick does** | Pulls `dev`, reads new requests, does the small ones in your lane and replies, hands ready tickets to workers. For the lead it also wires in screens teammates just shipped and, every 30 minutes at most, performs the whole demo on `dev` and tells the owning lane if a beat broke. |
+| **What it never does** | Promote, change direction, answer a question meant for you, or start anything large. Those wait under **Needs you**. |
+| **What it costs** | A tick that finds nothing ends at once. A tick that finds work is a normal turn, so it uses your rate limit; lengthen the interval or stop the loop if you're running low. |
+
+`/hack-setup` offers this to the lead when they join. To stop it, tell the chat to stop the loop.
 
 ### 5. `/hack-promote` (team, when the demo works end to end)
 
@@ -162,6 +182,7 @@ You don't have to type the slash for these or for `/hack-run`, `/hack-ship` and 
 | Skill | What |
 |---|---|
 | `/hack-orchestrate` | Run the lane: dispatch workers, merge, test, ship |
+| `/hack-heartbeat` | One timed check-in for the lane; run it with `/loop 5m /hack-heartbeat` |
 | `/hack-implement` | Build one ticket in the chat, without workers |
 | `/hack-run` | Build and launch the app |
 | `/hack-ship` | Commit → pull `dev` → PR → merged |
@@ -178,6 +199,7 @@ The skills run these for you. They also work from a terminal; `scripts/hack help
 |---|---|
 | `scripts/hack run` | Build and launch the app (`--device` for a plugged-in iPhone) |
 | `scripts/hack ship "msg" --closes <n>` | Commit → pull `dev` → PR → merged |
+| `scripts/hack pulse` | What changed since the last look; the check behind the heartbeat |
 | `scripts/hack queue` | Your lane's tickets: ready, in progress, needs you |
 | `scripts/hack request <lane> "need X"` | Ask another lane for something |
 | `scripts/hack decide "what" "before / now / why"` | Record and broadcast a change of direction |

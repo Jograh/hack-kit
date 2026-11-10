@@ -248,6 +248,36 @@ cmd_inbox() {
   return 0
 }
 
+# pulse: the heartbeat check. Prints only what changed since the last look (teammates' merges, inbox activity,
+# unclaimed ready tickets, and for the lead a due demo check). Prints "PULSE: quiet" when there is nothing to do,
+# so a /loop tick that finds nothing costs almost nothing. See the hack-heartbeat skill.
+PULSE_DEMO_MINUTES=30
+cmd_pulse() {
+  mkdir -p "$STATE"
+  local lane; lane="$(my_lane)"; [ -n "$lane" ] || die "no lane set — run scripts/hack setup"
+  if [ "${1:-}" = "--demo-checked" ]; then
+    git rev-parse -q --verify "origin/$INTEG" > "$STATE/pulse_demo_sha" 2>/dev/null || true
+    date +%s > "$STATE/pulse_demo_at"; echo "Demo check recorded."; return 0
+  fi
+  local out="" part
+  part="$(cmd_sync 2>&1 || true)";  [ -n "$part" ] && out="$out$part"$'\n\n'
+  part="$(cmd_inbox 2>/dev/null || true)"; [ -n "$part" ] && out="$out$part"$'\n\n'
+  part="$(cmd_queue 2>/dev/null | awk '/^READY/{p=1;print;next} /^[A-Z]/{p=0} p' || true)"
+  [ -n "$part" ] && out="$out$part"$'\n\n'
+  if [ "$lane" = "$(lead)" ] && [ -f "$ROOT/docs/DEMO.md" ] && has_remote; then
+    local sha last_sha last_at now prod
+    sha="$(git rev-parse -q --verify "origin/$INTEG" 2>/dev/null || true)"
+    prod="$(git rev-parse -q --verify "origin/$DEMO" 2>/dev/null || true)"
+    last_sha="$(cat "$STATE/pulse_demo_sha" 2>/dev/null || true)"
+    last_at="$(cat "$STATE/pulse_demo_at" 2>/dev/null || true)"; now="$(date +%s)"
+    if [ -z "$last_at" ]; then echo "$now" > "$STATE/pulse_demo_at"   # first pulse starts the clock
+    elif [ -n "$sha" ] && [ "$sha" != "$last_sha" ] && [ "$sha" != "$prod" ] && [ $((now - last_at)) -ge $((PULSE_DEMO_MINUTES * 60)) ]; then
+      out="${out}DEMO CHECK DUE: $INTEG has changed since the golden path was last performed ($(( (now - last_at) / 60 )) min ago). Perform docs/DEMO.md, then: scripts/hack pulse --demo-checked"$'\n\n'
+    fi
+  fi
+  if [ -n "$out" ]; then printf '%s' "$out" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'; else echo "PULSE: quiet"; fi
+}
+
 # ───────────────────────────── hooks ─────────────────────────────
 
 json_context() { # <event> <text>
@@ -1010,6 +1040,7 @@ hack — hackathon kit
   sync                    pull teammates' merged work into your lane branch
   inbox [--all]           new issue activity for your lane
   request <lane> "title" ["details"]   ask another lane for something (GitHub issue)
+  pulse                   heartbeat check: what changed since the last look, or "PULSE: quiet" (see /hack-heartbeat)
   queue                   your lane's tickets: ready for a worker / in progress / needs you
   collect <worker-branch> merge a finished background worker's branch into your lane branch
   orchestrate on|off      keep this chat dispatching workers while ready tickets remain
@@ -1045,6 +1076,7 @@ case "$sub" in
   labels) cmd_labels ;;
   scaffold-ios) cmd_scaffold_ios "$@" ;;
   queue) cmd_queue ;;
+  pulse) cmd_pulse "$@" ;;
   orchestrate) cmd_orchestrate "$@" ;;
   collect) cmd_collect "$@" ;;
   hook) cmd_hook "$@" ;;

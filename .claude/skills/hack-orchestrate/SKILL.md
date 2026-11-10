@@ -87,5 +87,6 @@ A hook false alarm, a confusing rule, a command that failed for no good reason: 
 
 ## Switches
 
+- `/loop 5m /hack-heartbeat` keeps the lane checking for requests, merges and ready tickets while the user isn't typing (the `hack-heartbeat` skill). Optional; recommended for the lead lane.
 - `scripts/hack orchestrate off` stops the automatic "keep dispatching" reminder; workers then start only when the user asks. `on` restores it.
 - Rate limits are real: every worker starts cold. If the user is close to a limit, or the tickets are tiny, do them one at a time or build them yourself with the `hack-implement` skill instead.
