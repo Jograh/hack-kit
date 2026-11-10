@@ -1,6 +1,6 @@
 ---
 name: hack-tickets
-description: "Break the demo script (or the current conversation) into tickets where every ticket belongs to exactly one lane, and publish them as GitHub issues under the map."
+description: "Break your lane's spec (or the current conversation) into tickets a background worker can build, and publish them as GitHub issues under the map. At kick-off the lead uses it to publish one stub ticket per lane."
 disable-model-invocation: true
 ---
 
@@ -10,13 +10,16 @@ Tracker operations are in `docs/agents/issue-tracker.md`. Lanes are in `.hack/la
 
 ## 1. Gather
 
-Work from the conversation, `docs/DEMO.md`, and each `docs/lanes/<lane>/CONTRACT.md`. If passed an issue number, read it with its comments.
+Two modes:
+
+- **Your lane (the normal case).** Each person runs this in their own chat, after designing their lane (`/grill-me` → `/hack-spec`). Work from the spec issue (passed as a number, or the open issue labelled `spec` + `lane:<your lane>`), the conversation, `docs/DEMO.md` and your `docs/lanes/<lane>/CONTRACT.md`. You publish tickets **for your own lane only**. Something another lane must do is a `scripts/hack request`, not a ticket.
+- **Kick-off (called by `/hack-wayfinder`).** Publish exactly one ticket per lane: the stub ticket below. Stop there; each owner writes the rest.
 
 ## 2. Draft
 
-For each lane, in this order:
+In this order:
 
-1. **Stub ticket** (always first, `P0-golden-path`): a hardcoded implementation of the lane's CONTRACT, shipped in ≤30 min, so consumers are unblocked immediately.
+1. **Stub ticket** (always first, `P0-golden-path`): a hardcoded implementation of the lane's CONTRACT, shipped in ≤30 min, so consumers are unblocked immediately. Skip it if kick-off already published it.
 2. **Golden-path tickets** (`P0-golden-path`): one per demo beat the lane carries. Done = the beat can be performed, staged or not.
 3. **Make-it-real tickets** (`P1-real`): replace a stage with the real thing, only where `demo-judge` says REAL.
 4. **Polish tickets** (`P2-polish`): things a judge notices. Nothing else.
@@ -31,9 +34,9 @@ Rules:
 - A change to a contract is its own ticket in the **owning** lane, and its body names the consuming lanes.
 - When unsure whether something deserves a ticket, call the Skill tool with "demo-judge" (Mode 2). CUT items go to the Cut list, not the tracker.
 
-## 3. Check with the team (one pass)
+## 3. Check with the user (one pass)
 
-Show the breakdown grouped by lane: title · priority · beat · blocked by. Ask once: anything in the wrong lane, too big, or should be cut? Apply the answers and publish. Do not iterate further; tickets are cheap to fix later.
+Show the breakdown: title · priority · beat · ready-for-agent or needs-human · blocked by. Ask once: anything too big, missing, or should be cut? Apply the answers and publish. Do not iterate further; tickets are cheap to fix later.
 
 ## 4. Publish
 
@@ -72,4 +75,4 @@ Part of #<map>
 
 No file paths beyond the lane's folder, no code, unless a snippet *is* the contract (a type, a JSON shape, a function signature).
 
-After publishing, add the ticket list to the map issue body as a checklist grouped by lane, and comment on the map: "Tickets published for <lanes>". That comment is a broadcast; every agent sees it.
+After publishing: comment on the spec issue with the ticket numbers and close it (the tickets carry the work now), and comment on the map: "Tickets published for <lane>: #a, #b, #c". That comment is a broadcast; every agent sees it. Then tell the user the next command: `/hack-orchestrate`.
