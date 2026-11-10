@@ -47,7 +47,7 @@ Open the folder in Claude Code and type:
 /hack-init
 ```
 
-It asks for the **team size (2 to 6)**, the repo name and your teammates' GitHub logins, then sets up the `dev` and `prod` branches, labels, auto-merge and branch protection, and invites everyone. If you already know the stack, it scaffolds an empty app so day one starts at the idea.
+It asks for the **team size (2 to 6)**, the repo name and your teammates' GitHub usernames, then sets up the `dev` and `prod` branches, labels, auto-merge and branch protection, and invites everyone. If you already know the stack, it scaffolds an empty app so day one starts at the idea.
 
 Team size can be changed until the lanes are named: `scripts/hack team <n>`.
 
