@@ -525,6 +525,15 @@ cmd_ship() {
 
   git add -A
   if ! cmd_lane_check --staged; then git reset -q; die "nothing shipped. Revert or move the out-of-lane changes above, then ship again."; fi
+  # A broken kit file would switch off every teammate's hooks on their next sync: never ship one.
+  local kf
+  for kf in $(git diff --cached --name-only | grep -E '^(scripts/hack|\.githooks/.*|\.hack/lanes\.json|\.claude/settings\.json)$'); do
+    [ -f "$kf" ] || continue
+    case "$kf" in
+      *.json) jq empty "$kf" 2>/dev/null || { git reset -q; die "$kf is not valid JSON — nothing shipped. Fix it first."; } ;;
+      *) bash -n "$kf" 2>/dev/null || { git reset -q; die "$kf has a shell syntax error — nothing shipped. Fix it first: bash -n $kf"; } ;;
+    esac
+  done
   if ! git diff --cached --quiet; then
     git commit -q -m "${msg:-$lane: checkpoint}${closes:+ (#$closes)}" || die "commit failed"
   fi
@@ -533,6 +542,10 @@ cmd_ship() {
   if [ -n "$check" ] && [ "$nocheck" = 0 ]; then
     echo "check: $check"
     ( eval "$check" ) || die "check failed — fix it or (only if you are sure dev won't break) ship with --no-check"
+  elif [ "$nocheck" = 0 ] && has_xcode_project \
+       && git diff --name-only "origin/$INTEG...HEAD" 2>/dev/null | grep -Eqv '(\.md$|^docs/|^\.claude/|^stacks/|^\.github/|^\.githooks/|^scripts/)'; then
+    # iOS default: never merge something that doesn't compile. Skipped for docs-only ships and on machines without Xcode.
+    ( cmd_build ) || die "the app does not build with your changes plus the latest $INTEG — nothing was pushed. If the error is in another lane's file, that lane broke $INTEG: scripts/hack request <lane> \"build broken: <error>\"."
   fi
   if [ "$(git rev-list --count "origin/$INTEG..HEAD")" = 0 ]; then echo "Nothing to ship — $br has no commits that $INTEG lacks."; return 0; fi
   git push -q -u origin "$br" || die "push failed"
@@ -1005,6 +1018,52 @@ SWIFT
   echo "  Try it: scripts/hack run"
 }
 
+has_xcode_project() { [ -f project.yml ] || [ -n "$(find . -maxdepth 2 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) -not -path '*/.build/*' | head -1)" ]; }
+
+# build: compile only (no simulator, no launch). The check `ship` runs before every merge on iOS.
+cmd_build() {
+  mkdir -p "$STATE"
+  local c; c="$(cfg '.run.check // empty')"
+  if [ -n "$c" ]; then echo "check: $c"; ( eval "$c" ); return $?; fi
+  has_xcode_project || { echo "Nothing to build: no Xcode project, and no run.check set in .hack/lanes.json."; return 0; }
+  [ "$(uname)" = "Darwin" ] && command -v xcodebuild >/dev/null 2>&1 || { echo "No Mac/Xcode here — build check skipped. A Mac teammate's next ship or run will catch a break."; return 0; }
+  local dd; ios_target
+  dd="${HACK_BUILD_DIR:-$HOME/Library/Caches/hack-kit}/$(basename "$ROOT")-$(printf '%s' "$ROOT" | cksum | cut -d' ' -f1)/dd"
+  mkdir -p "$dd"; echo "Build check: scheme '$IOS_SCHEME'…"
+  if ! xcodebuild "${IOS_TARGET[@]}" -scheme "$IOS_SCHEME" -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath "$dd" -quiet build > "$STATE/build.log" 2>&1; then
+    grep -E "error:|not allowed|failed with|BUILD FAILED" "$STATE/build.log" | sort -u | head -30
+    echo "BUILD FAILED — full log: .hack/state/build.log"; return 1
+  fi
+  echo "✓ Builds."
+}
+
+# doctor: is the kit itself healthy on this machine? Repairs what is safe to repair, and says how to fix the rest.
+cmd_doctor() {
+  local bad=0 lane br
+  ok()  { echo "  ✓ $1"; }
+  no()  { echo "  ✗ $1"; echo "      fix: $2"; bad=1; }
+  echo "── Kit check ──"
+  local t; for t in git gh jq; do command -v "$t" >/dev/null 2>&1 && ok "$t" || no "$t is not installed" "brew install $t"; done
+  bash -n "$ROOT/scripts/hack" 2>/dev/null && ok "scripts/hack parses" || no "scripts/hack has a syntax error (every hook is off)" "git checkout origin/$DEMO -- scripts/hack   (last promoted copy), then tell the lead lane"
+  jq empty "$CFG" 2>/dev/null && ok ".hack/lanes.json is valid" || no ".hack/lanes.json is not valid JSON (lane guard is off)" "git checkout origin/$INTEG -- .hack/lanes.json, or ask the lead lane"
+  jq empty "$ROOT/.claude/settings.json" 2>/dev/null && ok ".claude/settings.json is valid" || no ".claude/settings.json is not valid JSON (no hooks run)" "git checkout origin/$INTEG -- .claude/settings.json, or ask the lead lane"
+  if gh auth status >/dev/null 2>&1; then ok "GitHub login"; else no "gh is not logged in (no inbox, no ship)" "gh auth login"; fi
+  lane="$(my_lane)"
+  if [ -n "$lane" ] && lane_exists "$lane"; then ok "lane: $lane"; else no "this checkout has no lane (guard, sync and inbox are off)" "scripts/hack setup"; fi
+  br="$(current_branch)"
+  if [ -n "$lane" ]; then [ "$br" = "lane/$lane" ] && ok "branch: $br" || no "on '${br:-detached HEAD}', expected lane/$lane" "scripts/hack setup $lane"; fi
+  if [ "$(git config core.hooksPath)" = ".githooks" ]; then ok "git hooks active"; else git config core.hooksPath .githooks && ok "git hooks were off — switched back on"; fi
+  chmod +x "$ROOT/scripts/hack" "$ROOT"/.githooks/* 2>/dev/null || true
+  if in_git_op; then no "a merge is in progress (sync and ship are paused)" "finish it with the user: keep the OWNING lane's version of each conflicted file, then git commit"; else ok "no merge in progress"; fi
+  if has_remote; then
+    if git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=6 ls-remote -q --exit-code origin "refs/heads/$INTEG" >/dev/null 2>&1; then ok "GitHub reachable"
+    else no "can't reach GitHub (you can keep building; sync, inbox and ship wait)" "check the network, then scripts/hack sync"; fi
+  else no "no origin remote" "the lead runs scripts/hack init <org/repo>"; fi
+  rm -f "$STATE/sync.ts" "$STATE/inbox.ts" "$STATE/queue.ts" 2>/dev/null || true
+  [ "$bad" = 0 ] && echo "Kit is healthy." || echo "Fix the ✗ lines above. Building inside your lane is always safe meanwhile."
+  return $bad
+}
+
 cmd_run() {
   mkdir -p "$STATE"
   case " $* " in *" --device "*) case " $* " in *" --prod "*) ios_device_run --prod ;; *) ios_device_run ;; esac; return $? ;; esac
@@ -1032,6 +1091,8 @@ hack — hackathon kit
   run --device [--prod]   iOS: build, install and launch on the plugged-in iPhone (--prod = the promoted demo build)
   device                  iOS: the one-time phone checklist (Apple ID, cable, trust, Developer Mode)
   stack [ios|other]       LEAD: which kind of app this is (picks the guide in stacks/)
+  build                   compile only: the check `ship` runs before every merge (iOS build, or run.check)
+  doctor                  check the kit itself on this machine, repair what is safe, say how to fix the rest
   sim                     boot the simulator `run` uses and print its id
   decide "title" "Before/Now/Why" [--affects a,b]   record a direction change + push it to every agent
   direction [n]           the latest decisions
@@ -1076,6 +1137,8 @@ case "$sub" in
   labels) cmd_labels ;;
   scaffold-ios) cmd_scaffold_ios "$@" ;;
   queue) cmd_queue ;;
+  build) cmd_build ;;
+  doctor) cmd_doctor ;;
   pulse) cmd_pulse "$@" ;;
   orchestrate) cmd_orchestrate "$@" ;;
   collect) cmd_collect "$@" ;;
