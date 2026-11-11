@@ -86,6 +86,7 @@ Turns the brief into a plan. Budget about 10% of your time. It produces:
 
 - **The idea**, chosen from several after each is scored the way a judge would score it, including whether it can be built for real in the time you have.
 - **The demo script**, `docs/DEMO.md`: the 90 seconds a judge watches, written as 5 to 8 **beats**. A beat is one step of the demo: one thing the judge sees happen, such as "tap the camera button and the photo appears in the feed". The script is a showcase, not the product: it picks the app's most impressive features and puts them where a judge can't miss them. It also lists what a judge is likely to try afterwards, off script, because that has to work too.
+- **The stack**, `docs/STACK.md`: the shared technical choices (framework, backend or not, outside services, where data lives) and the dependencies every lane will need. The lead installs those up front.
 - **The lanes**: one per person. Each lane is a set of folders only that person's agent can write to, the beats of the demo it carries, and a contract saying what it exposes to the other lanes.
 - **One stub ticket per lane**: a hardcoded version of its contract, so nobody waits on anybody.
 
@@ -104,7 +105,7 @@ This is where the hackathon is spent. You design your part with your orchestrato
 | Design | `/grill-me` | Your orchestrator interviews you about how your lane will deliver its beats (the steps of the demo that wayfinder assigned to you), until the design is clear. |
 | Write it down | `/hack-spec` | Turns that conversation into one short spec issue for your lane. No interview; it writes up what you already said. |
 | Split it | `/hack-tickets` | Breaks the spec into small tickets, each marked `ready-for-agent` (a worker can build it alone) or `needs-human` (it needs you). It only writes tickets for your own lane. If you need something from a teammate's lane, your orchestrator sends them a request instead, and keeps building against their stub. |
-| Build it | `/hack-orchestrate` | Hands the ready tickets to background workers, up to three at once. As each finishes, your chat merges it, runs the app, checks it, and ships it to `dev`. |
+| Build it | `/hack-orchestrate` | Your chat becomes the orchestrator: it hands the ready tickets to background workers, up to three at once. As each finishes, your chat merges it, runs the app, checks it, and ships it to `dev`. After `/hack-setup` this is already running in your chat; the command restarts it. |
 
 While workers build, your chat shows a board and nothing else:
 
@@ -141,6 +142,17 @@ A heartbeat closes that gap by checking in on a timer:
 | **What it costs** | A tick that finds nothing ends at once. A tick that finds work is a normal turn, so it uses your rate limit; lengthen the interval or stop the loop if you're running low. |
 
 `/hack-setup` offers this to the lead when they join. To stop it, tell the chat to stop the loop.
+
+### When something breaks
+
+| What happens | How the kit handles it |
+|---|---|
+| **You need a new dependency** | Only the lead's lane can edit dependency files. Your orchestrator sends the lead a request and keeps building against its own small interface until the package lands. The ones agreed at kick-off are already installed. |
+| **Your change doesn't compile** | Shipping compiles your work together with the latest `dev` first, and refuses to merge if it fails. |
+| **Someone else broke `dev`** | Your orchestrator sees the error is in a file you don't own, sends that lane a request with the error, and carries on. It won't edit their code. `prod` is untouched, so the demo build still works. |
+| **Two people's work conflicts** | It shouldn't, since each folder has one owner. If it does, nothing is merged; it lands under **Needs you** with the files and who owns them. |
+| **GitHub or the wifi goes down** | Hooks skip quietly and you keep building in your lane. Sync, requests and shipping resume when it's back. |
+| **The kit itself misbehaves** | `scripts/hack doctor` checks tools, login, lane, branch, hooks and the kit's own files, repairs what's safe and prints the fix for the rest. A broken kit file can't be shipped: the check runs before every merge. Anything else gets logged with `scripts/hack feedback` for after the event, and the agent works around it. |
 
 ### 5. `/hack-promote` (team, when the demo works end to end)
 
@@ -184,8 +196,8 @@ None of these need the slash. Saying "run it" or "what if we changed the feed to
 | `/grill-me` | Get interviewed about a design until it's clear |
 | `/hack-spec` | Write the design down as a spec issue for your lane |
 | `/hack-tickets` | Split a spec into tickets for your lane |
-| `/hack-orchestrate` | Run the lane: dispatch workers, merge, test, ship |
-| `/hack-heartbeat` | One timed check-in for the lane; run it with `/loop 5m /hack-heartbeat` |
+| `/hack-orchestrate` | Turns your chat into your lane's orchestrator. It reads your lane's ticket queue, hands each ready ticket to a background worker (up to three at once), and when a worker finishes it merges the work, runs the app, checks it, and ships it to `dev`. It replies with the board. After `/hack-setup` this loads by itself at the start of every session, so you rarely type it; type it (or say "work the queue") to restart the loop. |
+| `/hack-heartbeat` | One check-in on a timer, for when you're not typing. Each tick pulls teammates' work, reads new requests, does the small ones, and dispatches ready tickets; for the lead it also re-runs the demo every 30 minutes. A tick that finds nothing ends immediately. It never runs by itself: start it with `/loop 5m /hack-heartbeat`, which calls it every 5 minutes. Optional; recommended for the lead. |
 | `/hack-implement` | Build one ticket in the chat, without workers |
 | `/hack-run` | Build and launch the app |
 | `/hack-ship` | Commit → pull `dev` → PR → merged |
@@ -203,6 +215,8 @@ The skills run these for you. They also work from a terminal; `scripts/hack help
 |---|---|
 | `scripts/hack run` | Build and launch the app (`--device` for a plugged-in iPhone) |
 | `scripts/hack ship "msg" --closes <n>` | Commit → pull `dev` → PR → merged |
+| `scripts/hack build` | Compile only; the check that runs before every merge |
+| `scripts/hack doctor` | Check the kit on this machine and repair what's safe |
 | `scripts/hack pulse` | What changed since the last look; the check behind the heartbeat |
 | `scripts/hack queue` | Your lane's tickets: ready, in progress, needs you |
 | `scripts/hack request <lane> "need X"` | Ask another lane for something |

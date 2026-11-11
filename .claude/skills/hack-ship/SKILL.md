@@ -7,7 +7,7 @@ description: Ship the current lane's work into dev in one step (commit, pull tea
 scripts/hack ship "<what a judge now sees, in a few words>" --closes <ticket-number>
 ```
 
-What it does, in order: stages everything → lane check (aborts if anything is outside your lane) → commits → merges the latest `dev` into your branch → runs `run.check` from `.hack/lanes.json` if one is set → pushes `lane/<you>` → opens a PR into `dev` → merges it (auto-merge once the `lane-check` passes, or immediately where the repo has no required checks).
+What it does, in order: stages everything → lane check (aborts if anything is outside your lane) → commits → merges the latest `dev` into your branch → runs the build check (`run.check` from `.hack/lanes.json` if one is set; otherwise, for an iOS app, a compile of your changes plus the latest `dev`; skipped for docs-only ships and on machines without Xcode), so nothing that doesn't build reaches `dev` → pushes `lane/<you>` → opens a PR into `dev` → merges it (auto-merge once the `lane-check` passes, or immediately where the repo has no required checks).
 
 Rules:
 

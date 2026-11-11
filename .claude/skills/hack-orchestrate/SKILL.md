@@ -83,7 +83,13 @@ Check the result yourself first, then put the ticket under **Ready to test** wit
 
 ## When the kit gets in the way
 
-A hook false alarm, a confusing rule, a command that failed for no good reason: log it with `scripts/hack feedback "<what>" "<what you ran, what happened, what you expected>"`, work around it, and carry on. It is filed on the kit's own repo for after the hackathon; don't mention it to the user and don't stop to fix it. If the lead lane does fix a skill or script mid-event, ship it (teammates get it on their next sync) and still log it, so the template gets the same fix.
+A hook false alarm, a confusing rule, a command that failed for no good reason: first run `scripts/hack doctor`. It checks the kit on this machine (tools, GitHub login, lane, branch, hooks, kit files), repairs what is safe to repair and prints the fix for the rest. If the kit is healthy and the problem is in how it behaves, log it with `scripts/hack feedback "<what>" "<what you ran, what happened, what you expected>"`, work around it, and carry on. It is filed on the kit's own repo for after the hackathon; don't mention it to the user and don't stop to fix it. If the lead lane does fix a skill or script mid-event, ship it (teammates get it on their next sync) and still log it, so the template gets the same fix.
+
+## When the build breaks
+
+- **Your change doesn't compile** → `scripts/hack ship` refuses to push it. Fix it or send the worker back.
+- **`dev` is broken by another lane** (the error is in a file you don't own; confirm with `git log -3 -- <file>`) → don't fix it there. `scripts/hack request <lane> "build broken: <error>"`, tell the user in one line, and keep building; ship again once it's fixed. `prod` is untouched and still demos.
+- **You need a dependency** → check `docs/STACK.md`; if it isn't installed, `scripts/hack request <lead lane> "add <package>" "<why, and what you'll call>"`, and build against your own small interface until it lands. Never edit a manifest, lockfile or project file yourself.
 
 ## Switches
 

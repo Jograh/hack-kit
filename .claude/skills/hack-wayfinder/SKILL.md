@@ -52,7 +52,23 @@ Call the Skill tool with "grilling" on the winner: **two rounds maximum**, bread
 
 5–8 beats. Every beat is something visible, and every beat is a real feature of the app, chosen because it is among the most impressive things the app does. A beat that needs explaining is two beats or a cut.
 
-## 4. Cut the lanes (10 min)
+## 4. Decide the stack (5 min)
+
+Now that the idea is known, settle the shared technical choices in one pass, so four agents don't each pick their own. The kind of app (`scripts/hack stack`) was chosen at `/hack-init`; if the winning idea needs the other one, change it now.
+
+Decide, with the team, and look the facts up yourself first (does the API have a free tier, does it work from a phone, how fast is it):
+
+- platform and framework (already fixed for iOS: SwiftUI);
+- whether there is a backend at all, and if so what and where it runs during the demo;
+- each outside service or model the showcase features depend on, and the fallback if it's down;
+- where data lives (on the device, a file, a hosted database) and what gets seeded;
+- **the dependencies every lane will need.** List them now.
+
+Write it to `docs/STACK.md`: one line per choice with the reason, plus the dependency list and the names (never the values) of the keys and env vars needed. Then, before the lanes start: the lead lane **installs every listed dependency and ships it**, and puts key names in `.env.example`. A dependency added up front is one request nobody has to make at hour six. Anything not on the list later is a request to the lead lane.
+
+For a non-iOS app, also bring the start-up process in line with these choices (`stacks/other/README.md`): `scripts/dev`, `run.command`, `run.url`, `run.check`.
+
+## 5. Cut the lanes (10 min)
 
 Rules, in priority order:
 
@@ -67,7 +83,7 @@ Rules, in priority order:
 
 Present the cut as a table (lane · owner · folders · beats carried · exposes · consumes) and get a yes from the team.
 
-## 5. Write it down and publish
+## 6. Write it down and publish
 
 1. Rewrite `.hack/lanes.json`: real lane names (short, lowercase, one word), `owner` = GitHub username, `mission`, `paths` (folder prefixes ending in `/`), `lead`, and `run` if the stack is known.
 2. Create each lane's folder(s) with a one-line `README.md`, and `docs/lanes/<lane>/CONTRACT.md`.

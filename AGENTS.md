@@ -61,9 +61,10 @@ scripts/hack ship "msg" --closes <n>      # commit → pull dev → PR → merge
 - Stub first, then real, then polish. A merged stub unblocks three people, but a stub is scaffolding: a beat that still runs on one is not done.
 - Real means it works with input the team didn't choose, and the obvious next tap doesn't crash or dead-end. Seed data (sample content, loaded through the app's real code paths) is fine; say what is seeded in `docs/DEMO.md`.
 - No abstractions for later, no refactors. Write a test only where it's faster than checking by hand (a parser, a scoring function); running the app is the main test. Timebox bugs to 15 minutes, then make the feature simpler or narrower. Don't paper over it.
-- New dependency = a request to the lead lane (manifests and lockfiles are where conflicts come from).
+- The shared technical choices and the agreed dependencies are in `docs/STACK.md` (written at kick-off; the lead lane installs them up front). A new dependency = a request to the lead lane (manifests and lockfiles are where conflicts come from); build against your own small interface until it lands.
+- `scripts/hack ship` won't merge something that doesn't build. If `dev` is broken by another lane, file a request on that lane and keep building; never fix another lane's file.
 - Keep secrets in `.env` (gitignored); put names only in `.env.example`.
-- The kit itself got in your way (a hook, a rule, a script)? `scripts/hack feedback "what" "details"`, work around it, carry on. It is logged on the kit repo for the next hackathon. Kit files belong to the lead lane; a fix there reaches everyone on their next sync.
+- The kit itself misbehaving (hooks silent, a command failing)? `scripts/hack doctor` checks it and repairs what's safe. The kit got in your way (a hook, a rule, a script)? `scripts/hack feedback "what" "details"`, work around it, carry on. It is logged on the kit repo for the next hackathon. Kit files belong to the lead lane; a fix there reaches everyone on their next sync.
 
 ## Agent skills
 
